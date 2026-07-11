@@ -18,6 +18,7 @@ class Effect:
         master: Player,
         layer: int = 0,
         game: GameManager | None = None,
+        clear: bool = False,
     ):
         self.name = name
         """效果名称"""
@@ -29,6 +30,8 @@ class Effect:
         """效果是否还在生效"""
         self.master = master
         """效果的拥有者"""
+        self.clear_after_round = clear
+        """在本回合结束后是否需要清除"""
         self._instances.append(weakref.ref(self))
 
     @classmethod

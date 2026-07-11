@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...main import GameManager
 from .dice import Dice
+from .effects import Effect
 from typing import Literal
 import random
 import weakref
@@ -42,9 +43,9 @@ class Player:
         """镀闪次数"""
         self.speacial_dice = speacial_dice
         """可用的曜彩骰"""
-        self.selected_dice = []
+        self.selected_dice: list[Dice] = []
         """选择的骰子，用于重投或者攻击/防御"""
-        self.effects = []
+        self.effects: list[Effect] = []
         """角色的效果列表"""
         self.is_agent = is_agent
         """是否是AI角色"""
@@ -119,6 +120,15 @@ class Player:
         assert action is not None
         return action, select_list
 
+    def begin_attack(self, hurts: int):
+        """角色遭受攻击后的行为"""
+        from .default import ForceFields
+
+        for effect in self.effects:
+            if isinstance(effect, ForceFields) and effect.alive:
+                return
+        self.hp -= hurts
+
     def after_attack_sum(self, game: GameManager):
         pass
 
@@ -129,4 +139,7 @@ class Player:
         pass
 
     def after_effect_settle(self, game: GameManager):
+        pass
+
+    def round_start(self, game: GameManager):
         pass

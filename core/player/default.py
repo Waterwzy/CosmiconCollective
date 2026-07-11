@@ -142,6 +142,39 @@ class RubbishBinPlayer(Player):
         game.attacker_extra_sum += (max_v - 2) * 7
 
 
+class TrafficLightPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            7, "自动机兵·甲虫", 10, 3, 3, [Dice(4), Dice(4), Dice(4), Dice(6)]
+        )
+        self.get_s_round: int = -1
+
+    def before_defence_select(self, game: GameManager):
+        game.reload_times += 1
+
+    def after_defence_sum(self, game: GameManager):
+        values = [dice.now_value for dice in self.selected_dice]
+        v_set = set(values)
+        m_len = 0
+        current = 0
+        for num in v_set:
+            if num - 1 in v_set:
+                continue
+            current = 1
+            while num + 1 in v_set:
+                num += 1
+                current += 1
+            m_len = max(m_len, current)
+        if m_len >= 3:
+            self.get_s_round = game.round + 1
+            self.effects.append(ForceFields(self, True))
+
+    def round_start(self, game: GameManager):
+        if game.round == self.get_s_round:
+            self.effects.append(Strength(self, 8, True))
+            self.get_s_round = -1
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -150,12 +183,13 @@ players = [
     BatRaccoonPlayer(),
     DormasPlayer(),
     RubbishBinPlayer(),
+    TrafficLightPlayer(),
 ]
 
 
 class Hack(Effect):
     def __init__(self, master: Player) -> None:
-        super().__init__("Hack", False, master)
+        super().__init__("骇入", False, master)
 
     def before_sum(self, game: GameManager):
         if not self.alive:
@@ -184,7 +218,7 @@ class InstantDamage(Effect):
     def __init__(
         self, master: Player, layers: int, game: GameManager | None = None
     ) -> None:
-        super().__init__("InstantDamage", True, master, layer=layers, game=game)
+        super().__init__("瞬伤", True, master, layer=layers, game=game)
         if game:
             self.on_denfination(game)
 
@@ -200,7 +234,7 @@ class InstantDamage(Effect):
 
 class Poisoning(Effect):
     def __init__(self, master: Player, layers: int) -> None:
-        super().__init__("Poisoning", True, master, layer=layers)
+        super().__init__("中毒", True, master, layer=layers)
 
     def after_settlement(self, game: GameManager):
         if not self.alive:
@@ -214,3 +248,17 @@ class Poisoning(Effect):
         self.layer -= 1
         if self.layer <= 0:
             self.alive = False
+
+
+class ForceFields(Effect):
+    def __init__(self, master: Player, clear: bool):
+        super().__init__("力场", False, master, clear=clear)
+
+
+class Strength(Effect):
+    def __init__(self, master: Player, layers: int, clear: bool):
+        super().__init__("力量", True, master=master, clear=clear, layer=layers)
+
+    def before_sum(self, game: GameManager):
+        if self.master.role == "attacker":
+            game.attacker_extra_sum += self.layer

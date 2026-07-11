@@ -15,7 +15,7 @@ class Dice:
         self.details = details
         """曜彩骰的特殊效果详情，非曜彩骰为None"""
         # 样式示例：列表长度需要为6，例如[{"effect":"some_effect","value":8},{},...]
-        self.now_value = None
+        self.now_value: int = 0
         """目前骰子的面数"""
         self.now_effect = None
         """目前的效果，无则为None"""

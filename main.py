@@ -38,10 +38,10 @@ class GameManager:
         self.attacker.role = "attacker"
         self.defender.role = "defender"
         for effect in self.attacker.effects:
-            if not effect.alive:
+            if not effect.alive or effect.clear_after_round:
                 self.attacker.effects.remove(effect)
         for effect in self.defender.effects:
-            if not effect.alive:
+            if not effect.alive or effect.clear_after_round:
                 self.defender.effects.remove(effect)
 
     def _is_win(self) -> bool:
@@ -56,6 +56,10 @@ class GameManager:
         else:
             print(f"第{self.round}回合，你后手")
         print(f"攻击方当前血量为：{self.attacker.hp}，防御方血量为：{self.defender.hp}")
+
+        self.attacker.round_start(self)
+        self.defender.round_start(self)
+
         for dice in self.attacker.dices:
             dice.load()
 
@@ -118,12 +122,14 @@ class GameManager:
         print(f"攻击方总点数为：{self.attacker_sum + self.attacker_extra_sum}")
         print(f"防御方总点数为：{self.defender_sum + self.defender_extra_sum}")
 
-        self.defender.hp -= max(
-            0,
-            self.attacker_sum
-            + self.attacker_extra_sum
-            - self.defender_sum
-            - self.defender_extra_sum,
+        self.defender.begin_attack(
+            max(
+                0,
+                self.attacker_sum
+                + self.attacker_extra_sum
+                - self.defender_sum
+                - self.defender_extra_sum,
+            )
         )
 
         self.effect_hook.after_settlement(self)
