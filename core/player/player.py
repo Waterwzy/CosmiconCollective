@@ -120,7 +120,7 @@ class Player:
         assert action is not None
         return action, select_list
 
-    def begin_attack(self, hurts: int):
+    def begin_attack(self, hurts: int, game: GameManager):
         """角色遭受攻击后的行为"""
         from .default import ForceFields
 
@@ -128,6 +128,7 @@ class Player:
             if isinstance(effect, ForceFields) and effect.alive:
                 return
         self.hp -= hurts
+        self.after_being_attacked(game, hurts)
 
     def after_attack_sum(self, game: GameManager):
         pass
@@ -142,4 +143,7 @@ class Player:
         pass
 
     def round_start(self, game: GameManager):
+        pass
+
+    def after_being_attacked(self, game: GameManager, hp_sum: int):
         pass

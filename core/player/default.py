@@ -175,6 +175,21 @@ class TrafficLightPlayer(Player):
             self.get_s_round = -1
 
 
+class CivetPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            8, "狸猫记者", 28, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(6)]
+        )
+
+    def after_being_attacked(self, game: GameManager, hp_sum: int):
+        if hp_sum > 0:
+            for dice in self.selected_dice:
+                if dice.now_value % 2 == 0:
+                    self.effects.append(InstantDamage(self, 2, game))
+                    return
+            self.effects.append(InstantDamage(self, 4, game))
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -184,6 +199,7 @@ players = [
     DormasPlayer(),
     RubbishBinPlayer(),
     TrafficLightPlayer(),
+    CivetPlayer(),
 ]
 
 

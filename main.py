@@ -129,7 +129,8 @@ class GameManager:
                 + self.attacker_extra_sum
                 - self.defender_sum
                 - self.defender_extra_sum,
-            )
+            ),
+            self,
         )
 
         self.effect_hook.after_settlement(self)
