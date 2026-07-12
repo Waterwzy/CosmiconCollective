@@ -43,11 +43,14 @@ class Dice:
         elif self.sides == 12:
             logger.warning("骰子已经到12点，无法继续升级")
 
-    def load(self):
+    def load(self, load_max: bool):
         """投骰子，可以用于初始投掷或者重投"""
         if self.special:
             side = random.randint(0, 5)
             self.now_value = self.details[side]["value"]  # type:ignore
             self.now_effect = self.details[side]["effect"]  # type:ignore
         else:
-            self.now_value = random.randint(1, self.sides)
+            if load_max:
+                self.now_value = random.randint(1, self.sides)
+            else:
+                self.now_value = random.randint(1, self.sides - 1)

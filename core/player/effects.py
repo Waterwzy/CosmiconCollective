@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-import weakref
 
 if TYPE_CHECKING:
     from ...main import GameManager
@@ -9,8 +8,6 @@ if TYPE_CHECKING:
 
 
 class Effect:
-    _instances = []
-
     def __init__(
         self,
         name: str,
@@ -32,12 +29,6 @@ class Effect:
         """效果的拥有者"""
         self.clear_after_round = clear
         """在本回合结束后是否需要清除"""
-        self._instances.append(weakref.ref(self))
-
-    @classmethod
-    def get_instances(cls):
-        cls._instances = [ref for ref in cls._instances if ref() is not None]
-        return cls._instances
 
     def before_sum(self, game: GameManager):
         """在计算总点数前触发的效果"""

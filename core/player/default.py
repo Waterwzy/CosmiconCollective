@@ -200,6 +200,22 @@ class ScootPlayer(Player):
                 game.defender.effects.append(Disturbance(game.defender, 1))
 
 
+class CompanyWorkerPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            10,
+            "基层员工·安保",
+            26,
+            3,
+            2,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
+            load_max=False,
+        )
+
+    def on_game_start(self, game: GameManager):
+        self.effects.append(Strength(self, 5, False))
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -211,6 +227,7 @@ players = [
     TrafficLightPlayer(),
     CivetPlayer(),
     ScootPlayer(),
+    CompanyWorkerPlayer(),
 ]
 
 

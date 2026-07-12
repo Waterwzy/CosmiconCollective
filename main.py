@@ -1,6 +1,5 @@
 from core.player.player import Player
 from core.player.default import players, DefaultAIPlayer
-from core.player.effects import Effect
 from typing import Literal
 import random
 
@@ -9,7 +8,7 @@ class GameManager:
     def __init__(self, red_player: Player, blue_player: Player) -> None:
         self.players = [red_player, blue_player]
         self.attacker_index = random.randint(0, 1)
-        self.round = 0
+        self.round = 1
         self.attacker_extra_sum = 0
         self.defender_extra_sum = 0
         self.effect_hook = EffectHookManager()
@@ -39,13 +38,16 @@ class GameManager:
         self.defender_extra_sum = 0
         self.attacker.role = "attacker"
         self.defender.role = "defender"
-        for effect in self.attacker.effects:
-            if not effect.alive or effect.clear_after_round:
-                self.attacker.effects.remove(effect)
-        for effect in self.defender.effects:
-            if not effect.alive or effect.clear_after_round:
-                self.defender.effects.remove(effect)
-        self.state = "begin"
+        self.attacker.effects = [
+            effect
+            for effect in self.attacker.effects
+            if effect.alive and not effect.clear_after_round
+        ]
+        self.defender.effects = [
+            effect
+            for effect in self.defender.effects
+            if effect.alive and not effect.clear_after_round
+        ]
 
     def _is_win(self) -> bool:
         if self.attacker.hp <= 0 or self.defender.hp <= 0:
@@ -53,7 +55,8 @@ class GameManager:
         return False
 
     def start_round(self):
-        self.next_round()
+        self.state = "begin"
+
         if self.attacker_index == 0:
             print(f"第{self.round}回合，你先手")
         else:
@@ -66,7 +69,7 @@ class GameManager:
         self.state = "attack"
 
         for dice in self.attacker.dices:
-            dice.load()
+            dice.load(self.attacker.load_max)
 
         self.reload_times = 2
         act = None
@@ -85,7 +88,7 @@ class GameManager:
             elif act == 2:
                 self.reload_times -= 1
                 for i in attack_selected:
-                    self.attacker.dices[i].load()
+                    self.attacker.dices[i].load(self.attacker.load_max)
 
         print(
             f"攻击方选择的骰子为：{[str(self.attacker.dices[i]) for i in attack_selected]}"
@@ -97,7 +100,7 @@ class GameManager:
         self.state = "defence"
 
         for dice in self.defender.dices:
-            dice.load()
+            dice.load(self.defender.load_max)
 
         self.reload_times = 0
         act = None
@@ -117,7 +120,7 @@ class GameManager:
             elif act == 2:
                 self.reload_times -= 1
                 for i in defence_selected:
-                    self.defender.dices[i].load()
+                    self.defender.dices[i].load(self.defender.load_max)
 
         print(
             f"防御方选择的骰子为：{[str(self.defender.dices[i]) for i in defence_selected]}"
@@ -151,7 +154,11 @@ class GameManager:
 
         print(f"防御方剩余血量为：{self.defender.hp}")
 
+        self.next_round()
+
     def main(self):
+        self.defender.on_game_start(self)
+        self.attacker.on_game_start(self)
         while not self._is_win():
             self.start_round()
 
@@ -161,18 +168,21 @@ class EffectHookManager:
         pass
 
     def before_sum(self, game: GameManager):
-        for effect_ref in Effect.get_instances():
-            effect = effect_ref()
+        for effect in game.attacker.effects:
+            effect.before_sum(game)
+        for effect in game.defender.effects:
             effect.before_sum(game)
 
     def after_settlement(self, game: GameManager):
-        for effect_ref in Effect.get_instances():
-            effect = effect_ref()
+        for effect in game.attacker.effects:
+            effect.after_settlement(game)
+        for effect in game.defender.effects:
             effect.after_settlement(game)
 
     def before_select(self, game: GameManager):
-        for effct_ref in Effect.get_instances():
-            effect = effct_ref()
+        for effect in game.attacker.effects:
+            effect.before_select(game)
+        for effect in game.defender.effects:
             effect.before_select(game)
 
 

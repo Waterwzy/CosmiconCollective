@@ -24,8 +24,9 @@ class Player:
         defence_dice: int,
         dices: list[Dice],
         flash_times: int = 0,
-        speacial_dice: Dice | None = None,
+        special_dice: Dice | None = None,
         is_agent: bool = False,
+        load_max: bool = True,
     ) -> None:
         self.pid = pid
         """角色id(唯一标识)"""
@@ -41,7 +42,7 @@ class Player:
         """当前可用的骰子"""
         self.flash_times = flash_times
         """镀闪次数"""
-        self.speacial_dice = speacial_dice
+        self.special_dice = special_dice
         """可用的曜彩骰"""
         self.selected_dice: list[Dice] = []
         """选择的骰子，用于重投或者攻击/防御"""
@@ -51,6 +52,8 @@ class Player:
         """是否是AI角色"""
         self.role: Literal["attacker", "defender"] | None = None
         """角色的身份，攻击方或防御方"""
+        self.load_max = load_max
+        """骰子是否可以投出最大值"""
         self._instances.append(weakref.ref(self))
 
     def __str__(self) -> str:
@@ -146,4 +149,7 @@ class Player:
         pass
 
     def after_being_attacked(self, game: GameManager, hp_sum: int):
+        pass
+
+    def on_game_start(self, game: GameManager):
         pass
