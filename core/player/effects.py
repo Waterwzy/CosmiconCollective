@@ -19,7 +19,7 @@ class Effect:
         layer: int = 0,
         game: GameManager | None = None,
         clear: bool = False,
-    ):
+    ):  # game参数仅适用于有on_defination钩子的效果在实例化时传入
         self.name = name
         """效果名称"""
         self.addable = addable
@@ -49,4 +49,8 @@ class Effect:
 
     def after_settlement(self, game: GameManager):
         """在结算后触发的效果"""
+        pass
+
+    def before_select(self, game: GameManager):
+        """在选择骰子前触发的效果"""
         pass

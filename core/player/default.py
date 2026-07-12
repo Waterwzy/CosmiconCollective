@@ -5,6 +5,7 @@ from .player import Player
 from .effects import Effect
 from typing import TYPE_CHECKING
 import math
+from . import helper
 
 if TYPE_CHECKING:
     from ...main import GameManager
@@ -153,18 +154,7 @@ class TrafficLightPlayer(Player):
         game.reload_times += 1
 
     def after_defence_sum(self, game: GameManager):
-        values = [dice.now_value for dice in self.selected_dice]
-        v_set = set(values)
-        m_len = 0
-        current = 0
-        for num in v_set:
-            if num - 1 in v_set:
-                continue
-            current = 1
-            while num + 1 in v_set:
-                num += 1
-                current += 1
-            m_len = max(m_len, current)
+        m_len = helper.max_continue_dices(self)
         if m_len >= 3:
             self.get_s_round = game.round + 1
             self.effects.append(ForceFields(self, True))
@@ -190,6 +180,26 @@ class CivetPlayer(Player):
             self.effects.append(InstantDamage(self, 4, game))
 
 
+class ScootPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            9, "斯科特", 22, 3, 2, [Dice(4), Dice(4), Dice(6), Dice(8), Dice(8)]
+        )
+
+    def after_attack_sum(self, game: GameManager):
+        max_c = helper.max_continue_dices(self)
+        if max_c >= 3:
+            flag = False
+            for effect in game.defender.effects:
+                if isinstance(effect, Disturbance):
+                    effect.layer += 1
+                    if effect.layer >= 2:
+                        self.effects.append(InstantDamage(self, 5, game))
+                    flag = True
+            if not flag:
+                game.defender.effects.append(Disturbance(game.defender, 1))
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -200,6 +210,7 @@ players = [
     RubbishBinPlayer(),
     TrafficLightPlayer(),
     CivetPlayer(),
+    ScootPlayer(),
 ]
 
 
@@ -278,3 +289,17 @@ class Strength(Effect):
     def before_sum(self, game: GameManager):
         if self.master.role == "attacker":
             game.attacker_extra_sum += self.layer
+
+
+class Disturbance(Effect):
+    def __init__(self, master: Player, layers: int):
+        super().__init__("干扰", True, master, layer=layers)
+
+    def before_select(self, game: GameManager):
+        if (
+            self.master.role == "attacker"
+            and game.state == "attack"
+            or self.master.role == "defender"
+            and game.state == "defence"
+        ):
+            game.reload_times = max(0, game.reload_times - self.layer)

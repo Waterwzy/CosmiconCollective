@@ -1,6 +1,7 @@
 from core.player.player import Player
 from core.player.default import players, DefaultAIPlayer
 from core.player.effects import Effect
+from typing import Literal
 import random
 
 
@@ -13,6 +14,7 @@ class GameManager:
         self.defender_extra_sum = 0
         self.effect_hook = EffectHookManager()
         self.reload_times = 0
+        self.state: Literal["begin", "attack", "defence", "sum"] | None = None
 
     @property
     def attacker(self):
@@ -43,6 +45,7 @@ class GameManager:
         for effect in self.defender.effects:
             if not effect.alive or effect.clear_after_round:
                 self.defender.effects.remove(effect)
+        self.state = "begin"
 
     def _is_win(self) -> bool:
         if self.attacker.hp <= 0 or self.defender.hp <= 0:
@@ -60,12 +63,17 @@ class GameManager:
         self.attacker.round_start(self)
         self.defender.round_start(self)
 
+        self.state = "attack"
+
         for dice in self.attacker.dices:
             dice.load()
 
         self.reload_times = 2
         act = None
         attack_selected = []
+
+        self.effect_hook.before_select(self)
+        print(f"攻击方可用重投次数：{self.reload_times}")
 
         while True:
             print(f"攻击方骰子为：{[str(dice) for dice in self.attacker.dices]}")
@@ -86,6 +94,8 @@ class GameManager:
 
         self.attacker.after_attack_sum(self)
 
+        self.state = "defence"
+
         for dice in self.defender.dices:
             dice.load()
 
@@ -94,6 +104,8 @@ class GameManager:
         defence_selected = []
 
         self.defender.before_defence_select(self)
+        self.effect_hook.before_select(self)
+        print(f"防御方可用重投次数：{self.reload_times}")
 
         while True:
             print(f"防御方骰子为：{[str(dice) for dice in self.defender.dices]}")
@@ -113,6 +125,8 @@ class GameManager:
         self.defender.selected_dice = [self.defender.dices[i] for i in defence_selected]
 
         self.defender.after_defence_sum(self)
+
+        self.state = "sum"
 
         self.effect_hook.before_sum(self)
 
@@ -155,6 +169,11 @@ class EffectHookManager:
         for effect_ref in Effect.get_instances():
             effect = effect_ref()
             effect.after_settlement(game)
+
+    def before_select(self, game: GameManager):
+        for effct_ref in Effect.get_instances():
+            effect = effct_ref()
+            effect.before_select(game)
 
 
 if __name__ == "__main__":
