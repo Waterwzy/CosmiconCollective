@@ -38,16 +38,8 @@ class GameManager:
         self.defender_extra_sum = 0
         self.attacker.role = "attacker"
         self.defender.role = "defender"
-        self.attacker.effects = [
-            effect
-            for effect in self.attacker.effects
-            if effect.alive and not effect.clear_after_round
-        ]
-        self.defender.effects = [
-            effect
-            for effect in self.defender.effects
-            if effect.alive and not effect.clear_after_round
-        ]
+        self.attacker.clear_effects()
+        self.defender.clear_effects()
 
     def _is_win(self) -> bool:
         if self.attacker.hp <= 0 or self.defender.hp <= 0:

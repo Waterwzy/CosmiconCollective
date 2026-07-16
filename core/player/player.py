@@ -133,6 +133,24 @@ class Player:
         self.hp -= hurts
         self.after_being_attacked(game, hurts)
 
+    def clear_effects(self):
+        self.effects = [
+            eff for eff in self.effects if eff.alive and not eff.clear_after_round
+        ]
+
+    def add_effect(self, effect: Effect):
+        self.clear_effects()
+        if effect.addable:
+            flag = False
+            for eff in self.effects:
+                if isinstance(eff, type(effect)):
+                    eff.layer += effect.layer
+                    flag = True
+            if not flag:
+                self.effects.append(effect)
+        else:
+            self.effects.append(effect)
+
     def after_attack_sum(self, game: GameManager):
         pass
 

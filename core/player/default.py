@@ -74,7 +74,7 @@ class KleSparSparPlayer(Player):
 
     def after_attack_sum(self, game: GameManager):
         if self.hp != 25:
-            self.effects.append(Hack(self))
+            self.add_effect(Hack(self))
 
 
 class BatRaccoonPlayer(Player):
@@ -91,7 +91,7 @@ class BatRaccoonPlayer(Player):
     def after_defence_sum(self, game: GameManager):
         values = [dice.now_value for dice in self.selected_dice]
         if len(values) != len(set(values)):
-            self.effects.append(InstantDamage(self, 4, game))
+            self.add_effect(InstantDamage(self, 4, game=game))
 
     def before_defence_select(self, game: GameManager):
         game.reload_times += 1
@@ -113,11 +113,7 @@ class DormasPlayer(Player):
             if dice.now_value % 2 != 0:
                 return
 
-        for effect in self.effects:
-            if isinstance(effect, Poisoning) and effect.alive:
-                effect.layer += 2
-                return
-        self.effects.append(Poisoning(self, 2))
+        self.add_effect(Poisoning(self, 2))
 
 
 class RubbishBinPlayer(Player):
@@ -157,11 +153,11 @@ class TrafficLightPlayer(Player):
         m_len = helper.max_continue_dices(self)
         if m_len >= 3:
             self.get_s_round = game.round + 1
-            self.effects.append(ForceFields(self, True))
+            self.add_effect(ForceFields(self, True))
 
     def round_start(self, game: GameManager):
         if game.round == self.get_s_round:
-            self.effects.append(Strength(self, 8, True))
+            self.add_effect(Strength(self, 8, True))
             self.get_s_round = -1
 
 
@@ -175,9 +171,9 @@ class CivetPlayer(Player):
         if hp_sum > 0:
             for dice in self.selected_dice:
                 if dice.now_value % 2 == 0:
-                    self.effects.append(InstantDamage(self, 2, game))
+                    self.add_effect(InstantDamage(self, 2, game))
                     return
-            self.effects.append(InstantDamage(self, 4, game))
+            self.add_effect(InstantDamage(self, 4, game))
 
 
 class ScootPlayer(Player):
@@ -194,10 +190,10 @@ class ScootPlayer(Player):
                 if isinstance(effect, Disturbance):
                     effect.layer += 1
                     if effect.layer >= 2:
-                        self.effects.append(InstantDamage(self, 5, game))
+                        self.add_effect(InstantDamage(self, 5, game))
                     flag = True
             if not flag:
-                game.defender.effects.append(Disturbance(game.defender, 1))
+                game.defender.add_effect(Disturbance(game.defender, 1))
 
 
 class CompanyWorkerPlayer(Player):
@@ -213,7 +209,7 @@ class CompanyWorkerPlayer(Player):
         )
 
     def on_game_start(self, game: GameManager):
-        self.effects.append(Strength(self, 5, False))
+        self.add_effect(Strength(self, 5, False))
 
 
 players = [
