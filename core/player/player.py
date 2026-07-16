@@ -7,12 +7,9 @@ from .dice import Dice
 from .effects import Effect
 from typing import Literal
 import random
-import weakref
 
 
 class Player:
-    _instances = []
-
     """卡牌数据"""
 
     def __init__(
@@ -54,18 +51,12 @@ class Player:
         """角色的身份，攻击方或防御方"""
         self.load_max = load_max
         """骰子是否可以投出最大值"""
-        self._instances.append(weakref.ref(self))
 
     def __str__(self) -> str:
         return f"{self.id}(pid:{self.pid})"
 
     def __repr__(self) -> str:
         return self.__str__()
-
-    @classmethod
-    def get_instances(cls):
-        cls._instances = [ref for ref in cls._instances if ref() is not None]
-        return cls._instances
 
     def _legal_select(
         self,
