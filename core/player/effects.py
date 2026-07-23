@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...main import GameManager
     from .player import Player
+
+from ..context import GamePatch, GameView
 
 
 class Effect:
@@ -14,7 +15,7 @@ class Effect:
         addable: bool,
         master: Player,
         layer: int = 0,
-        game: GameManager | None = None,
+        game=None,
         clear: bool = False,
     ):  # game参数仅适用于有on_defination钩子的效果在实例化时传入
         self.name = name
@@ -30,18 +31,18 @@ class Effect:
         self.clear_after_round = clear
         """在本回合结束后是否需要清除"""
 
-    def before_sum(self, game: GameManager):
+    def before_sum(self, view: GameView) -> GamePatch | None:
         """在计算总点数前触发的效果"""
         pass
 
-    def on_denfination(self, game: GameManager):
+    def on_denfination(self, view: GameView) -> GamePatch | None:
         """在实例化后立刻触发的效果"""
         pass
 
-    def after_settlement(self, game: GameManager):
+    def after_settlement(self, view: GameView) -> GamePatch | None:
         """在结算后触发的效果"""
         pass
 
-    def before_select(self, game: GameManager):
+    def before_select(self, view: GameView) -> GamePatch | None:
         """在选择骰子前触发的效果"""
         pass

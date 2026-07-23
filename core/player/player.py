@@ -1,10 +1,8 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from ...main import GameManager
 from .dice import Dice
 from .effects import Effect
+from ..context import GamePatch, GameView
 from typing import Literal
 import random
 
@@ -114,23 +112,37 @@ class Player:
         assert action is not None
         return action, select_list
 
-    def begin_attack(self, hurts: int, game: GameManager):
-        """角色遭受攻击后的行为"""
+    def begin_attack(self, view: GameView, hurts: int) -> GamePatch:
+        """角色遭受攻击后的行为，返回包含伤害与受击后效果的 GamePatch。
+
+        力场（ForceFields）只免疫普通伤害（common），受击后效果仍然可以触发。
+        """
         from .default import ForceFields
 
-        for effect in self.effects:
-            if isinstance(effect, ForceFields) and effect.alive:
-                return
-        self.hp -= hurts
-        self.after_being_attacked(game, hurts)
+        if self.role is None:
+            return GamePatch()
+        has_forcefield = any(
+            isinstance(effect, ForceFields) and effect.alive for effect in self.effects
+        )
+        common_damage = 0 if has_forcefield else hurts
+        damage_patch = GamePatch(
+            damage=[{"role": self.role, "type": "common", "count": common_damage}]
+        )
+        after_patch = self.after_being_attacked(view, hurts)
+        if after_patch is None:
+            after_patch = GamePatch()
+        return damage_patch.merge(after_patch)
 
     def clear_effects(self):
         self.effects = [
             eff for eff in self.effects if eff.alive and not eff.clear_after_round
         ]
 
+    def _rm_outdate_effects(self):
+        self.effects = [eff for eff in self.effects if eff.alive]
+
     def add_effect(self, effect: Effect):
-        self.clear_effects()
+        self._rm_outdate_effects()
         if effect.addable:
             flag = False
             for eff in self.effects:
@@ -142,23 +154,23 @@ class Player:
         else:
             self.effects.append(effect)
 
-    def after_attack_sum(self, game: GameManager):
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
         pass
 
-    def after_defence_sum(self, game: GameManager):
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
         pass
 
-    def before_defence_select(self, game: GameManager):
+    def before_defence_select(self, view: GameView) -> GamePatch | None:
         pass
 
-    def after_effect_settle(self, game: GameManager):
+    def after_effect_settle(self, view: GameView) -> GamePatch | None:
         pass
 
-    def round_start(self, game: GameManager):
+    def round_start(self, view: GameView) -> GamePatch | None:
         pass
 
-    def after_being_attacked(self, game: GameManager, hp_sum: int):
+    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
         pass
 
-    def on_game_start(self, game: GameManager):
+    def on_game_start(self, view: GameView) -> GamePatch | None:
         pass

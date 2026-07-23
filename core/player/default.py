@@ -3,12 +3,10 @@ from __future__ import annotations
 from .dice import Dice
 from .player import Player
 from .effects import Effect
-from typing import TYPE_CHECKING
-import math
 from . import helper
+from ..context import GamePatch, GameView
 
-if TYPE_CHECKING:
-    from ...main import GameManager
+from typing import Literal
 
 
 class DefaultPlayer(Player):
@@ -42,23 +40,23 @@ class ChimeraPlayer(Player):
             [Dice(4), Dice(4), Dice(6), Dice(6)],
         )
 
-    def after_effect_settle(self, game: GameManager):
-        if not self.role == "attacker":
-            return
-        sum_dict = {}
+    def after_effect_settle(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return None
+        sum_dict: dict[int, int] = {}
         for dice in self.selected_dice:
-            if dice.now_value not in sum_dict:
-                sum_dict[dice.now_value] = 0
-            sum_dict[dice.now_value] += 1
-        flag = False
+            sum_dict[dice.now_value] = sum_dict.get(dice.now_value, 0) + 1
         add_sum = 0
+        flag = False
         for value, count in sum_dict.items():
             if count >= 2 and not flag:
                 add_sum = 3
                 if value == 4:
                     add_sum = 7
                     flag = True
-        game.attacker_extra_sum += add_sum
+        if add_sum == 0:
+            return None
+        return GamePatch(add_extra_attack=add_sum)
 
 
 class KleSparSparPlayer(Player):
@@ -72,9 +70,10 @@ class KleSparSparPlayer(Player):
             [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
         )
 
-    def after_attack_sum(self, game: GameManager):
-        if self.hp != 25:
-            self.add_effect(Hack(self))
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if self.hp != 25 and self.role is not None:
+            return GamePatch(effects_to_add=[(self.role, Hack(self))])
+        return None
 
 
 class BatRaccoonPlayer(Player):
@@ -88,13 +87,14 @@ class BatRaccoonPlayer(Player):
             [Dice(4), Dice(4), Dice(4), Dice(6)],
         )
 
-    def after_defence_sum(self, game: GameManager):
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
         values = [dice.now_value for dice in self.selected_dice]
-        if len(values) != len(set(values)):
-            self.add_effect(InstantDamage(self, 4, game=game))
+        if len(values) != len(set(values)) and self.role is not None:
+            return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 4))])
+        return None
 
-    def before_defence_select(self, game: GameManager):
-        game.reload_times += 1
+    def before_defence_select(self, view: GameView) -> GamePatch | None:
+        return GamePatch(add_reload_times=1)
 
 
 class DormasPlayer(Player):
@@ -108,12 +108,13 @@ class DormasPlayer(Player):
             [Dice(4), Dice(4), Dice(6), Dice(6)],
         )
 
-    def after_attack_sum(self, game: GameManager):
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
         for dice in self.selected_dice:
             if dice.now_value % 2 != 0:
-                return
-
-        self.add_effect(Poisoning(self, 2))
+                return None
+        if self.role is not None:
+            return GamePatch(effects_to_add=[(self.role, Poisoning(self, 2))])
+        return None
 
 
 class RubbishBinPlayer(Player):
@@ -122,21 +123,16 @@ class RubbishBinPlayer(Player):
             6, "阮·梅造物", 25, 4, 2, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(4)]
         )
 
-    def after_effect_settle(self, game: GameManager):
-        if not self.role == "attacker":
-            return
-        selected_dict = {}
+    def after_effect_settle(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return None
+        selected_dict: dict[int, int] = {}
         for dice in self.selected_dice:
-            if dice.now_value not in selected_dict:
-                selected_dict[dice.now_value] = 0
-            selected_dict[dice.now_value] += 1
-        max_v = -math.inf
-        for count in selected_dict.values():
-            max_v = max(max_v, count)
-        if not max_v >= 3:
-            return
-        max_v = int(max_v)
-        game.attacker_extra_sum += (max_v - 2) * 7
+            selected_dict[dice.now_value] = selected_dict.get(dice.now_value, 0) + 1
+        max_v = max(selected_dict.values(), default=0)
+        if max_v < 3:
+            return None
+        return GamePatch(add_extra_attack=(int(max_v) - 2) * 7)
 
 
 class TrafficLightPlayer(Player):
@@ -146,19 +142,29 @@ class TrafficLightPlayer(Player):
         )
         self.get_s_round: int = -1
 
-    def before_defence_select(self, game: GameManager):
-        game.reload_times += 1
+    def before_defence_select(self, view: GameView) -> GamePatch | None:
+        return GamePatch(add_reload_times=1)
 
-    def after_defence_sum(self, game: GameManager):
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        if self.role is None:
+            return None
         m_len = helper.max_continue_dices(self)
         if m_len >= 3:
-            self.get_s_round = game.round + 1
-            self.add_effect(ForceFields(self, True))
+            return GamePatch(
+                effects_to_add=[(self.role, ForceFields(self, True))],
+                player_state_changes=[(self.role, "get_s_round", view.round + 1)],
+            )
+        return None
 
-    def round_start(self, game: GameManager):
-        if game.round == self.get_s_round:
-            self.add_effect(Strength(self, 8, True))
-            self.get_s_round = -1
+    def round_start(self, view: GameView) -> GamePatch | None:
+        if self.role is None:
+            return None
+        if view.round == self.get_s_round:
+            return GamePatch(
+                effects_to_add=[(self.role, Strength(self, 8, True))],
+                player_state_changes=[(self.role, "get_s_round", -1)],
+            )
+        return None
 
 
 class CivetPlayer(Player):
@@ -167,13 +173,13 @@ class CivetPlayer(Player):
             8, "狸猫记者", 28, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(6)]
         )
 
-    def after_being_attacked(self, game: GameManager, hp_sum: int):
-        if hp_sum > 0:
-            for dice in self.selected_dice:
-                if dice.now_value % 2 == 0:
-                    self.add_effect(InstantDamage(self, 2, game))
-                    return
-            self.add_effect(InstantDamage(self, 4, game))
+    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        if hp_sum <= 0 or self.role is None:
+            return None
+        for dice in self.selected_dice:
+            if dice.now_value % 2 == 0:
+                return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 2))])
+        return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 4))])
 
 
 class ScootPlayer(Player):
@@ -182,18 +188,25 @@ class ScootPlayer(Player):
             9, "斯科特", 22, 3, 2, [Dice(4), Dice(4), Dice(6), Dice(8), Dice(8)]
         )
 
-    def after_attack_sum(self, game: GameManager):
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if self.role is None:
+            return None
         max_c = helper.max_continue_dices(self)
-        if max_c >= 3:
-            flag = False
-            for effect in game.defender.effects:
-                if isinstance(effect, Disturbance):
-                    effect.layer += 1
-                    if effect.layer >= 2:
-                        self.add_effect(InstantDamage(self, 5, game))
-                    flag = True
-            if not flag:
-                game.defender.add_effect(Disturbance(game.defender, 1))
+        if max_c < 3:
+            return None
+        target_role: Literal["attacker", "defender"] = (
+            "defender" if self.role == "attacker" else "attacker"
+        )
+        for effect in view.get_player_view(target_role).effects:
+            if isinstance(effect, Disturbance):
+                extra_effects: list[tuple[Literal["attacker", "defender"], Effect]] = []
+                if effect.layer + 1 >= 2:
+                    extra_effects.append((self.role, InstantDamage(self, 5)))
+                return GamePatch(
+                    effect_layer_changes=[(target_role, Disturbance, 1)],
+                    effects_to_add=extra_effects,
+                )
+        return GamePatch(effects_to_add=[(target_role, Disturbance(target_role, 1))])
 
 
 class CompanyWorkerPlayer(Player):
@@ -208,8 +221,10 @@ class CompanyWorkerPlayer(Player):
             load_max=False,
         )
 
-    def on_game_start(self, game: GameManager):
-        self.add_effect(Strength(self, 5, False))
+    def on_game_start(self, view: GameView) -> GamePatch | None:
+        if self.role is None:
+            return None
+        return GamePatch(effects_to_add=[(self.role, Strength(self, 5, False))])
 
 
 players = [
@@ -231,63 +246,49 @@ class Hack(Effect):
     def __init__(self, master: Player) -> None:
         super().__init__("骇入", False, master)
 
-    def before_sum(self, game: GameManager):
-        if not self.alive:
-            return
-        max_value = -math.inf
-        if self.master.role == "attacker":
-            for i, dice in enumerate(game.defender.selected_dice):
-                if dice.special:
-                    continue
-                if dice.now_value > max_value:
-                    max_value = dice.now_value
-                    index = i
-            game.defender.selected_dice[index].now_value = 2
-        else:
-            for i, dice in enumerate(game.attacker.selected_dice):
-                if dice.special:
-                    continue
-                if dice.now_value > max_value:
-                    max_value = dice.now_value
-                    index = i
-            game.attacker.selected_dice[index].now_value = 2
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
+        target_role: Literal["attacker", "defender"] = (
+            "defender" if self.master.role == "attacker" else "attacker"
+        )
         self.alive = False
+        return GamePatch(intend_hack=[(target_role, 1)])
 
 
 class InstantDamage(Effect):
-    def __init__(
-        self, master: Player, layers: int, game: GameManager | None = None
-    ) -> None:
-        super().__init__("瞬伤", True, master, layer=layers, game=game)
-        if game:
-            self.on_denfination(game)
+    def __init__(self, master: Player, layers: int) -> None:
+        super().__init__("瞬伤", True, master, layer=layers)
 
-    def on_denfination(self, game: GameManager):
-        if not self.alive:
-            return
-        if self.master.role == "attacker":
-            game.defender.hp -= self.layer
-        else:
-            game.attacker.hp -= self.layer
+    def on_denfination(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
+        target_role: Literal["attacker", "defender"] = (
+            "defender" if self.master.role == "attacker" else "attacker"
+        )
         self.alive = False
+        return GamePatch(
+            damage=[{"role": target_role, "type": "instant", "count": self.layer}]
+        )
 
 
 class Poisoning(Effect):
     def __init__(self, master: Player, layers: int) -> None:
         super().__init__("中毒", True, master, layer=layers)
 
-    def after_settlement(self, game: GameManager):
-        if not self.alive:
-            return
-        if self.master.role == "attacker":
-            print(f"攻击方中毒效果{self.layer}层生效")
-            game.defender.hp -= self.layer
-        else:
-            print(f"防御方中毒效果{self.layer}层生效")
-            game.attacker.hp -= self.layer
-        self.layer -= 1
-        if self.layer <= 0:
-            self.alive = False
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
+        target_role: Literal["attacker", "defender"] = (
+            "defender" if self.master.role == "attacker" else "attacker"
+        )
+        print(
+            f"{'攻击方' if self.master.role == 'attacker' else '防御方'}中毒效果{self.layer}层生效"
+        )
+        return GamePatch(
+            damage=[{"role": target_role, "type": "poisoning", "count": self.layer}],
+            effect_layer_changes=[(self.master.role, Poisoning, -1)],
+        )
 
 
 class ForceFields(Effect):
@@ -299,20 +300,30 @@ class Strength(Effect):
     def __init__(self, master: Player, layers: int, clear: bool):
         super().__init__("力量", True, master=master, clear=clear, layer=layers)
 
-    def before_sum(self, game: GameManager):
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
         if self.master.role == "attacker":
-            game.attacker_extra_sum += self.layer
+            return GamePatch(add_extra_attack=self.layer)
+        return None
 
 
 class Disturbance(Effect):
-    def __init__(self, master: Player, layers: int):
-        super().__init__("干扰", True, master, layer=layers)
+    def __init__(self, master: Player | Literal["attacker", "defender"], layers: int):
+        # 兼容旧调用中传入 role 字符串的场景；GameContext 会在添加效果前修正 master
+        if isinstance(master, str):
+            super().__init__("干扰", True, Player(0, "", 0, 0, 0, []), layer=layers)
+        else:
+            super().__init__("干扰", True, master, layer=layers)
 
-    def before_select(self, game: GameManager):
+    def before_select(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
         if (
             self.master.role == "attacker"
-            and game.state == "attack"
+            and view.state == "attack"
             or self.master.role == "defender"
-            and game.state == "defence"
+            and view.state == "defence"
         ):
-            game.reload_times = max(0, game.reload_times - self.layer)
+            return GamePatch(add_reload_times=-self.layer)
+        return None
