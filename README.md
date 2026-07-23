@@ -8,12 +8,13 @@
 
 ```text
 ├ core #核心py文件
-    └ player #玩家相关
-        ├ default.py #默认配置，包含卡牌和效果的配置
-        ├ dice.py #骰子基类
-        ├ effects.py #效果基类
-        ├ helper.py #辅助函数
-        └ player.py #玩家卡牌基类
+|   ├ player #玩家相关
+|   |   ├ default.py #默认配置，包含卡牌和效果的配置
+|   |   ├ dice.py #骰子基类
+|   |   ├ effects.py #效果基类
+|   |   ├ helper.py #辅助函数
+|   |   └ player.py #玩家卡牌基类
+|   └ context.py #对局快照，游戏状态补丁类
 ├ main.py #主入口，游戏管理器和效果钩子的定义
 └ README.md #本文件
 ```

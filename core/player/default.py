@@ -262,6 +262,21 @@ class OverManPlayer(Player):
         return GamePatch.merge_all(patch_list)
 
 
+class TeamLeaderPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            12, "资深员工·组长", 22, 3, 2, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(8)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        selected = [dice.now_value for dice in view.attacker.selected_dice]
+        return GamePatch(add_extra_attack=len(set(selected)))
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        selected = [dice.now_value for dice in view.defender.selected_dice]
+        return GamePatch(add_extra_defence=len(set(selected)))
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -275,6 +290,7 @@ players = [
     ScootPlayer(),
     CompanyWorkerPlayer(),
     OverManPlayer(),
+    TeamLeaderPlayer(),
 ]
 
 
