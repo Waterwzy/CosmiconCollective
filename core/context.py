@@ -136,6 +136,8 @@ class GamePatch:
         add_reload_times: int = 0,
         add_extra_attack: int = 0,
         add_extra_defence: int = 0,
+        add_attacker_hp: int = 0,
+        add_defender_hp: int = 0,
         effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]]
         | None = None,
         dice_value_changes: list[tuple[Literal["attacker", "defender"], int, int]]
@@ -150,6 +152,8 @@ class GamePatch:
         self.add_reload_times = add_reload_times
         self.add_extra_attack = add_extra_attack
         self.add_extra_defence = add_extra_defence
+        self.add_attacker_hp = add_attacker_hp
+        self.add_defender_hp = add_defender_hp
         self.effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]] = (
             effects_to_add if effects_to_add is not None else []
         )
@@ -167,7 +171,7 @@ class GamePatch:
         )
 
     def __str__(self) -> str:
-        return f"Patch:\nDanmage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nEffect layer changes:{self.effect_layer_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}"
+        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nEffect layer changes:{self.effect_layer_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}"
 
     def merge(self, other: GamePatch) -> GamePatch:
         """将另一个 patch 合并到当前 patch，同类伤害会叠加。"""
@@ -204,6 +208,8 @@ class GamePatch:
             add_reload_times=self.add_reload_times + other.add_reload_times,
             add_extra_attack=self.add_extra_attack + other.add_extra_attack,
             add_extra_defence=self.add_extra_defence + other.add_extra_defence,
+            add_attacker_hp=self.add_attacker_hp + other.add_attacker_hp,
+            add_defender_hp=self.add_defender_hp + other.add_defender_hp,
             effects_to_add=list(self.effects_to_add) + list(other.effects_to_add),
             dice_value_changes=list(self.dice_value_changes)
             + list(other.dice_value_changes),
@@ -246,6 +252,12 @@ class GameContext:
         for dam in patch.damage:
             target = self._get_player(dam["role"])
             target.hp -= dam["count"]
+            if dam["count"] != 0:
+                target.attack_in_round = True
+
+        # 回复血量
+        self._game.attacker.hp = min(self._game.attacker.max_hp, self._game.attacker.hp + patch.add_attacker_hp)
+        self._game.defender.hp = min(self._game.defender.max_hp, self._game.defender.hp + patch.add_defender_hp)
 
         # 额外点数
         self._game.attacker_extra_sum += patch.add_extra_attack

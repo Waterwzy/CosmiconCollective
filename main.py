@@ -44,6 +44,8 @@ class GameManager:
         self.defender.role = "defender"
         self.attacker.clear_effects()
         self.defender.clear_effects()
+        self.attacker.attack_in_round = False
+        self.attacker.attack_in_round = False
 
     def _is_win(self) -> bool:
         if self.attacker.hp <= 0 or self.defender.hp <= 0:
@@ -164,10 +166,20 @@ class GameManager:
         )
         print(f"受到伤害：{hurts}")
         hurt_patch = self.defender.begin_attack(self.context.create_view(), hurts)
-        print(f"sum state patch{hurt_patch}")
+        print(f"sum state patch\n{hurt_patch}")
         self.context.apply_patch(hurt_patch)
 
         self.effect_hook.after_settlement(self.context)
+
+        after_settle_view = self.context.create_view()
+        aap = self.attacker.after_settlement(after_settle_view)
+        dap = self.defender.after_settlement(after_settle_view)
+        after_settle_patch = []
+        if aap:
+            after_settle_patch.append(aap)
+        if dap:
+            after_settle_patch.append(dap)
+        self.context.apply_patch(GamePatch.merge_all(after_settle_patch))
 
         print(f"防御方剩余血量为：{self.defender.hp}")
 

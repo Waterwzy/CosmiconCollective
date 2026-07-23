@@ -227,6 +227,32 @@ class CompanyWorkerPlayer(Player):
         return GamePatch(effects_to_add=[(self.role, Strength(self, 5, False))])
 
 
+class OverManPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            11,
+            "蕉研组的财富蕉师",
+            24,
+            4,
+            3,
+            [Dice(4),Dice(4),Dice(4),Dice(6),Dice(6)]
+        )
+        self.trigger_once = False
+
+    def before_defence_select(self, view: GameView) -> GamePatch | None:
+        return GamePatch(add_reload_times=1)
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        patch_list = []
+        if not self.trigger_once and self.hp <= 5:
+            patch_list.append(GamePatch(player_state_changes=[("defender","trigger_once",True),("defender","defence_dice",4)]))
+        if self.role == "defender" and not self.attack_in_round:
+           patch_list.append(GamePatch(effects_to_add=[("defender",Recover(self, 5))]))
+        if not patch_list:
+            return
+        return GamePatch.merge_all(patch_list)
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -239,6 +265,7 @@ players = [
     CivetPlayer(),
     ScootPlayer(),
     CompanyWorkerPlayer(),
+    OverManPlayer(),
 ]
 
 
@@ -327,3 +354,14 @@ class Disturbance(Effect):
         ):
             return GamePatch(add_reload_times=-self.layer)
         return None
+
+class Recover(Effect):
+    def __init__(self, master: Player, layer: int ):
+        super().__init__("治愈", True, master, layer)
+
+    def on_denfination(self, view: GameView) -> GamePatch | None:
+        self.alive = False
+        if self.master.role == "attacker":
+            return GamePatch(add_attacker_hp=self.layer)
+        else:
+            return GamePatch(add_defender_hp=self.layer)

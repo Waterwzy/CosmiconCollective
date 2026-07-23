@@ -29,6 +29,8 @@ class Player:
         """角色名称"""
         self.hp = hp
         """角色血量"""
+        self.max_hp = hp
+        """角色最大血量（血量上限）"""
         self.attack_dice = attack_dice
         """攻击可用骰子数量"""
         self.defence_dice = defence_dice
@@ -49,6 +51,8 @@ class Player:
         """角色的身份，攻击方或防御方"""
         self.load_max = load_max
         """骰子是否可以投出最大值"""
+        self.attack_in_round = False
+        """当前回合中是否收到伤害"""
 
     def __str__(self) -> str:
         return f"{self.id}(pid:{self.pid})"
@@ -173,4 +177,7 @@ class Player:
         pass
 
     def on_game_start(self, view: GameView) -> GamePatch | None:
+        pass
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
         pass
