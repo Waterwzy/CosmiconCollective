@@ -256,8 +256,12 @@ class GameContext:
                 target.attack_in_round = True
 
         # 回复血量
-        self._game.attacker.hp = min(self._game.attacker.max_hp, self._game.attacker.hp + patch.add_attacker_hp)
-        self._game.defender.hp = min(self._game.defender.max_hp, self._game.defender.hp + patch.add_defender_hp)
+        self._game.attacker.hp = min(
+            self._game.attacker.max_hp, self._game.attacker.hp + patch.add_attacker_hp
+        )
+        self._game.defender.hp = min(
+            self._game.defender.max_hp, self._game.defender.hp + patch.add_defender_hp
+        )
 
         # 额外点数
         self._game.attacker_extra_sum += patch.add_extra_attack
