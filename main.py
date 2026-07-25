@@ -80,6 +80,8 @@ class GameManager:
         act = None
         attack_selected = []
 
+        self.attacker.attack_dice = self.attacker.ori_attack_dices
+        self.attacker.defence_dice = self.attacker.ori_denfece_dices
         self.effect_hook.before_select(self.context)
         print(f"攻击方可用重投次数：{self.reload_times}")
 
@@ -116,6 +118,8 @@ class GameManager:
         dp = self.defender.before_defence_select(self.context.create_view())
         if dp:
             self.context.apply_patch(dp)
+        self.defender.attack_dice = self.defender.ori_attack_dices
+        self.defender.defence_dice = self.defender.ori_denfece_dices
         self.effect_hook.before_select(self.context)
         print(f"防御方可用重投次数：{self.reload_times}")
 

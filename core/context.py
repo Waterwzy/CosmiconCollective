@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from collections import Counter
 
 if TYPE_CHECKING:
     from ..main import GameManager
@@ -138,11 +139,11 @@ class GamePatch:
         add_extra_defence: int = 0,
         add_attacker_hp: int = 0,
         add_defender_hp: int = 0,
+        add_attack_dice: dict[Literal["attacker", "defender"], int] = {},
+        add_defence_dice: dict[Literal["attacker", "defender"], int] = {},
         effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]]
         | None = None,
         dice_value_changes: list[tuple[Literal["attacker", "defender"], int, int]]
-        | None = None,
-        effect_layer_changes: list[tuple[Literal["attacker", "defender"], type, int]]
         | None = None,
         player_state_changes: list[tuple[Literal["attacker", "defender"], str, Any]]
         | None = None,
@@ -154,15 +155,14 @@ class GamePatch:
         self.add_extra_defence = add_extra_defence
         self.add_attacker_hp = add_attacker_hp
         self.add_defender_hp = add_defender_hp
+        self.add_attack_dice = add_attack_dice
+        self.add_defence_dice = add_defence_dice
         self.effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]] = (
             effects_to_add if effects_to_add is not None else []
         )
         self.dice_value_changes: list[
             tuple[Literal["attacker", "defender"], int, int]
         ] = dice_value_changes if dice_value_changes is not None else []
-        self.effect_layer_changes: list[
-            tuple[Literal["attacker", "defender"], type, int]
-        ] = effect_layer_changes if effect_layer_changes is not None else []
         self.player_state_changes: list[
             tuple[Literal["attacker", "defender"], str, Any]
         ] = player_state_changes if player_state_changes is not None else []
@@ -171,7 +171,7 @@ class GamePatch:
         )
 
     def __str__(self) -> str:
-        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nEffect layer changes:{self.effect_layer_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}"
+        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}"
 
     def merge(self, other: GamePatch) -> GamePatch:
         """将另一个 patch 合并到当前 patch，同类伤害会叠加。"""
@@ -210,11 +210,15 @@ class GamePatch:
             add_extra_defence=self.add_extra_defence + other.add_extra_defence,
             add_attacker_hp=self.add_attacker_hp + other.add_attacker_hp,
             add_defender_hp=self.add_defender_hp + other.add_defender_hp,
+            add_attack_dice=dict(
+                Counter(self.add_attack_dice) + Counter(other.add_attack_dice)
+            ),
+            add_defence_dice=dict(
+                Counter(self.add_defence_dice) + Counter(other.add_defence_dice)
+            ),
             effects_to_add=list(self.effects_to_add) + list(other.effects_to_add),
             dice_value_changes=list(self.dice_value_changes)
             + list(other.dice_value_changes),
-            effect_layer_changes=list(self.effect_layer_changes)
-            + list(other.effect_layer_changes),
             player_state_changes=list(self.player_state_changes)
             + list(other.player_state_changes),
             intend_hack=merged_hack_list,
@@ -263,6 +267,32 @@ class GameContext:
             self._game.defender.max_hp, self._game.defender.hp + patch.add_defender_hp
         )
 
+        # 防御/攻击等级
+        if patch.add_attack_dice.get("attacker"):
+            self._game.attacker.attack_dice = min(
+                self._game.attacker.ori_attack_dices
+                + patch.add_attack_dice["attacker"],
+                self._game.attacker.ori_max_dices,
+            )
+        if patch.add_attack_dice.get("defender"):
+            self._game.defender.attack_dice = min(
+                self._game.defender.ori_attack_dices
+                + patch.add_attack_dice["defender"],
+                self._game.defender.ori_max_dices,
+            )
+        if patch.add_defence_dice.get("attacker"):
+            self._game.attacker.defence_dice = min(
+                self._game.attacker.ori_denfece_dices
+                + patch.add_defence_dice["attacker"],
+                self._game.attacker.ori_max_dices,
+            )
+        if patch.add_defence_dice.get("defender"):
+            self._game.defender.defence_dice = min(
+                self._game.defender.ori_denfece_dices
+                + patch.add_defence_dice["defender"],
+                self._game.defender.ori_max_dices,
+            )
+
         # 额外点数
         self._game.attacker_extra_sum += patch.add_extra_attack
         self._game.defender_extra_sum += patch.add_extra_defence
@@ -272,13 +302,13 @@ class GameContext:
         if self._game.reload_times < 0:
             self._game.reload_times = 0
 
-        # 新增效果，并触发需要立即生效的 on_denfination
+        # 新增效果：可叠加且目标已有同类效果时直接叠加层数，否则新增实例
         newly_added_effects: list[Effect] = []
         for role, effect in patch.effects_to_add:
             target = self._get_player(role)
             effect.master = target
-            target.add_effect(effect)
-            newly_added_effects.append(effect)
+            if target.add_effect(effect):
+                newly_added_effects.append(effect)
 
         if newly_added_effects:
             view = self.create_view()
@@ -294,16 +324,6 @@ class GameContext:
         for role, index, value in patch.dice_value_changes:
             target = self._get_player(role)
             target.selected_dice[index].now_value = value
-
-        # 修改已有效果层数，层数耗尽后标记失效
-        for role, effect_type, delta in patch.effect_layer_changes:
-            target = self._get_player(role)
-            for eff in target.effects:
-                if isinstance(eff, effect_type):
-                    eff.layer += delta
-                    if eff.layer <= 0:
-                        eff.alive = False
-                    break
 
         # 玩家自定义状态字段（如 TrafficLightPlayer 的 get_s_round）
         for role, attr, value in patch.player_state_changes:

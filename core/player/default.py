@@ -203,10 +203,10 @@ class ScootPlayer(Player):
                 if effect.layer + 1 >= 2:
                     extra_effects.append((self.role, InstantDamage(self, 5)))
                 return GamePatch(
-                    effect_layer_changes=[(target_role, Disturbance, 1)],
-                    effects_to_add=extra_effects,
+                    effects_to_add=extra_effects
+                    + [(target_role, Disturbance(self, 1))],
                 )
-        return GamePatch(effects_to_add=[(target_role, Disturbance(target_role, 1))])
+        return GamePatch(effects_to_add=[(target_role, Disturbance(self, 1))])
 
 
 class CompanyWorkerPlayer(Player):
@@ -247,10 +247,10 @@ class OverManPlayer(Player):
         if not self.trigger_once and self.hp <= 5:
             patch_list.append(
                 GamePatch(
-                    player_state_changes=[
-                        ("defender", "trigger_once", True),
-                        ("defender", "defence_dice", 4),
-                    ]
+                    player_state_changes=[("defender", "trigger_once", True)],
+                    effects_to_add=[(self.role, AddDefenceLevel(self, 1))]
+                    if self.role
+                    else [],
                 )
             )
         if self.role == "defender" and not self.attack_in_round:
@@ -277,6 +277,24 @@ class TeamLeaderPlayer(Player):
         return GamePatch(add_extra_defence=len(set(selected)))
 
 
+class CastoricePlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            13, "遐蝶", 27, 3, 2, [Dice(4), Dice(4), Dice(6), Dice(8), Dice(8)]
+        )
+
+    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        if hp_sum >= 8 and self.role == "defender":
+            return GamePatch(
+                effects_to_add=[
+                    (self.role, AddDefenceLevel(self, 1)),
+                    (self.role, AddAttackLevel(self, 1)),
+                ]
+            )
+        elif hp_sum <= 5 and self.role and hp_sum > 0:
+            return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 3))])
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -291,6 +309,7 @@ players = [
     CompanyWorkerPlayer(),
     OverManPlayer(),
     TeamLeaderPlayer(),
+    CastoricePlayer(),
 ]
 
 
@@ -339,7 +358,7 @@ class Poisoning(Effect):
         )
         return GamePatch(
             damage=[{"role": target_role, "type": "poisoning", "count": self.layer}],
-            effect_layer_changes=[(self.master.role, Poisoning, -1)],
+            effects_to_add=[(self.master.role, Poisoning(self.master, -1))],
         )
 
 
@@ -361,12 +380,8 @@ class Strength(Effect):
 
 
 class Disturbance(Effect):
-    def __init__(self, master: Player | Literal["attacker", "defender"], layers: int):
-        # 兼容旧调用中传入 role 字符串的场景；GameContext 会在添加效果前修正 master
-        if isinstance(master, str):
-            super().__init__("干扰", True, Player(0, "", 0, 0, 0, []), layer=layers)
-        else:
-            super().__init__("干扰", True, master, layer=layers)
+    def __init__(self, master: Player, layers: int):
+        super().__init__("干扰", True, master, layer=layers)
 
     def before_select(self, view: GameView) -> GamePatch | None:
         if not self.alive or self.master.role is None:
@@ -391,3 +406,21 @@ class Recover(Effect):
             return GamePatch(add_attacker_hp=self.layer)
         else:
             return GamePatch(add_defender_hp=self.layer)
+
+
+class AddAttackLevel(Effect):
+    def __init__(self, master: Player, layer: int):
+        super().__init__("攻击等级", True, master, layer)
+
+    def before_select(self, view: GameView) -> GamePatch | None:
+        if self.master.role == "attacker" and view.state == "attack":
+            return GamePatch(add_attack_dice={"attacker": self.layer})
+
+
+class AddDefenceLevel(Effect):
+    def __init__(self, master: Player, layer: int):
+        super().__init__("防御等级", True, master, layer)
+
+    def before_select(self, view: GameView) -> GamePatch | None:
+        if self.master.role == "defender" and view.state == "defence":
+            return GamePatch(add_defence_dice={"defender": self.layer})

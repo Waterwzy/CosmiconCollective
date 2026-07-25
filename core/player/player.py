@@ -37,6 +37,12 @@ class Player:
         """防御可用骰子数量"""
         self.dices = dices
         """当前可用的骰子"""
+        self.ori_max_dices = len(self.dices)
+        """原本最大可用骰子数量"""
+        self.ori_attack_dices = attack_dice
+        """原本攻击骰子数量"""
+        self.ori_denfece_dices = defence_dice
+        """原本防御骰子数量"""
         self.flash_times = flash_times
         """镀闪次数"""
         self.special_dice = special_dice
@@ -145,18 +151,21 @@ class Player:
     def _rm_outdate_effects(self):
         self.effects = [eff for eff in self.effects if eff.alive]
 
-    def add_effect(self, effect: Effect):
+    def add_effect(self, effect: Effect) -> bool:
+        """添加效果。若目标已有同类可叠加且存活的效果，则叠加层数并返回 False；否则新增实例并返回 True。"""
         self._rm_outdate_effects()
         if effect.addable:
-            flag = False
             for eff in self.effects:
-                if isinstance(eff, type(effect)):
+                if isinstance(eff, type(effect)) and eff.alive:
                     eff.layer += effect.layer
-                    flag = True
-            if not flag:
-                self.effects.append(effect)
+                    if eff.layer <= 0:
+                        eff.alive = False
+                    return False
+            self.effects.append(effect)
+            return True
         else:
             self.effects.append(effect)
+            return True
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
         pass
