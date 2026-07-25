@@ -17,4 +17,4 @@ jobs :
       - name : ruff check
         run : |
           ruff format --check .
-          ruff check .
+          ruff check -v .
