@@ -1,5 +1,6 @@
-from loguru import logger
 import random
+
+from loguru import logger
 
 
 class Dice:
@@ -28,7 +29,7 @@ class Dice:
 
     def effect(self, *args, **kwargs):
         """曜彩骰的特殊效果，子类可以重写这个方法"""
-        return None
+        return
 
     def upgrade(self):
         if self.special:

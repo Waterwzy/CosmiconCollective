@@ -33,16 +33,12 @@ class Effect:
 
     def before_sum(self, view: GameView) -> GamePatch | None:
         """在计算总点数前触发的效果"""
-        pass
 
     def on_denfination(self, view: GameView) -> GamePatch | None:
         """在实例化后立刻触发的效果"""
-        pass
 
     def after_settlement(self, view: GameView) -> GamePatch | None:
         """在结算后触发的效果"""
-        pass
 
     def before_select(self, view: GameView) -> GamePatch | None:
         """在选择骰子前触发的效果"""
-        pass

@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+
 from collections import Counter
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 if TYPE_CHECKING:
     from ..main import GameManager
-    from .player.player import Player
     from .player.effects import Effect
+    from .player.player import Player
 
 
 class PlayerView:
@@ -139,8 +140,8 @@ class GamePatch:
         add_extra_defence: int = 0,
         add_attacker_hp: int = 0,
         add_defender_hp: int = 0,
-        add_attack_dice: dict[Literal["attacker", "defender"], int] = {},
-        add_defence_dice: dict[Literal["attacker", "defender"], int] = {},
+        add_attack_dice: dict[Literal["attacker", "defender"], int] | None = None,
+        add_defence_dice: dict[Literal["attacker", "defender"], int] | None = None,
         effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]]
         | None = None,
         dice_value_changes: list[tuple[Literal["attacker", "defender"], int, int]]
@@ -155,8 +156,8 @@ class GamePatch:
         self.add_extra_defence = add_extra_defence
         self.add_attacker_hp = add_attacker_hp
         self.add_defender_hp = add_defender_hp
-        self.add_attack_dice = add_attack_dice
-        self.add_defence_dice = add_defence_dice
+        self.add_attack_dice = add_attack_dice if add_attack_dice is not None else {}
+        self.add_defence_dice = add_defence_dice if add_defence_dice is not None else {}
         self.effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]] = (
             effects_to_add if effects_to_add is not None else []
         )
@@ -299,8 +300,7 @@ class GameContext:
 
         # 重投次数
         self._game.reload_times += patch.add_reload_times
-        if self._game.reload_times < 0:
-            self._game.reload_times = 0
+        self._game.reload_times = max(self._game.reload_times, 0)
 
         # 新增效果：可叠加且目标已有同类效果时直接叠加层数，否则新增实例
         newly_added_effects: list[Effect] = []

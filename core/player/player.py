@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import random
+from typing import Literal
+
+from ..context import GamePatch, GameView
 from .dice import Dice
 from .effects import Effect
-from ..context import GamePatch, GameView
-from typing import Literal
-import random
 
 
 class Player:
@@ -84,12 +85,15 @@ class Player:
         for i in selected:
             if i < 0 or i >= len(self.dices):
                 return False
-        if action == 1:
-            if role == "attack" and len(selected) != self.attack_dice:
-                return False
-            elif role == "defence" and len(selected) != self.defence_dice:
-                return False
-        return True
+        return not (
+            action == 1
+            and (
+                role == "attack"
+                and len(selected) != self.attack_dice
+                or role == "defence"
+                and len(selected) != self.defence_dice
+            )
+        )
 
     def select_dice(
         self, role: Literal["attack", "defence"], reload_times: int

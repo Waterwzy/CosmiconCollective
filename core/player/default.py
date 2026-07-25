@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from .dice import Dice
-from .player import Player
-from .effects import Effect
-from . import helper
-from ..context import GamePatch, GameView
-
 from typing import Literal
+
+from ..context import GamePatch, GameView
+from . import helper
+from .dice import Dice
+from .effects import Effect
+from .player import Player
 
 
 class DefaultPlayer(Player):

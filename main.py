@@ -1,8 +1,9 @@
-from core.player.player import Player
-from core.player.default import players, DefaultAIPlayer
-from core.context import GameContext, GamePatch
-from typing import Literal
 import random
+from typing import Literal
+
+from core.context import GameContext, GamePatch
+from core.player.default import DefaultAIPlayer, players
+from core.player.player import Player
 
 
 class GameManager:
@@ -48,9 +49,7 @@ class GameManager:
         self.attacker.attack_in_round = False
 
     def _is_win(self) -> bool:
-        if self.attacker.hp <= 0 or self.defender.hp <= 0:
-            return True
-        return False
+        return self.attacker.hp <= 0 or self.defender.hp <= 0
 
     def start_round(self):
         self.state = "begin"
