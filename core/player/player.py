@@ -130,15 +130,26 @@ class Player:
         """角色遭受攻击后的行为，返回包含伤害与受击后效果的 GamePatch。
 
         力场（ForceFields）只免疫普通伤害（common），受击后效果仍然可以触发。
+        洞穿（Pierce）无视防御和力场效果
         """
-        from .default import ForceFields
+        from .default import ForceFields, Pierce
 
         if self.role is None:
             return GamePatch()
         has_forcefield = any(
             isinstance(effect, ForceFields) and effect.alive for effect in self.effects
         )
-        common_damage = 0 if has_forcefield else hurts
+
+        has_pierce = any(
+            isinstance(effect, Pierce) and effect.alive
+            for effect in view.attacker.effects
+        )
+        if has_pierce:
+            common_damage = view.attacker_sum + view.attacker_extra_sum
+        elif has_forcefield:
+            common_damage = 0
+        else:
+            common_damage = hurts
         damage_patch = GamePatch(
             damage=[{"role": self.role, "type": "common", "count": common_damage}]
         )

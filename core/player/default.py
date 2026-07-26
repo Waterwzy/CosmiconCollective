@@ -295,6 +295,24 @@ class CastoricePlayer(Player):
             return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 3))])
 
 
+class YellowSpringPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            14, "黄泉", 33, 2, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(8)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return None
+        if all(dice.now_value == 4 for dice in view.attacker.selected_dice):
+            return GamePatch(
+                effects_to_add=[
+                    (self.role, Pierce(self, True)),
+                    (self.role, AddAttackLevel(self, 1)),
+                ]
+            )
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -310,6 +328,7 @@ players = [
     OverManPlayer(),
     TeamLeaderPlayer(),
     CastoricePlayer(),
+    YellowSpringPlayer(),
 ]
 
 
@@ -424,3 +443,8 @@ class AddDefenceLevel(Effect):
     def before_select(self, view: GameView) -> GamePatch | None:
         if self.master.role == "defender" and view.state == "defence":
             return GamePatch(add_defence_dice={"defender": self.layer})
+
+
+class Pierce(Effect):
+    def __init__(self, master: Player, clear: bool = False):
+        super().__init__("洞穿", False, master=master, clear=clear)
