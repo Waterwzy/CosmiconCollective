@@ -2,7 +2,7 @@ import random
 from typing import Literal
 
 from core.context import GameContext, GamePatch
-from core.player.default import DefaultAIPlayer, players
+from core.player.default import DefaultAIPlayer, DoubleShot, players
 from core.player.player import Player
 
 
@@ -168,7 +168,16 @@ class GameManager:
             - self.defender_extra_sum,
         )
         print(f"受到伤害：{hurts}")
-        hurt_patch = self.defender.begin_attack(self.context.create_view(), hurts)
+        double_shots = [
+            e for e in self.attacker.effects if isinstance(e, DoubleShot) and e.alive
+        ]
+        hit_view = self.context.create_view()
+        hurt_patch = GamePatch.merge_all(
+            [
+                self.defender.begin_attack(hit_view, hurts)
+                for _ in range(1 + len(double_shots))
+            ]
+        ).merge(GamePatch(effects_to_consume=double_shots))
         print(f"sum state patch\n{hurt_patch}")
         self.context.apply_patch(hurt_patch)
 

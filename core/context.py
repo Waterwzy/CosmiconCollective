@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 if TYPE_CHECKING:
@@ -149,6 +150,7 @@ class GamePatch:
         player_state_changes: list[tuple[Literal["attacker", "defender"], str, Any]]
         | None = None,
         intend_hack: list[tuple[Literal["attacker", "defender"], int]] | None = None,
+        effects_to_consume: Sequence[Effect] | None = None,
     ) -> None:
         self.damage: list[DamageDict] = damage if damage is not None else []
         self.add_reload_times = add_reload_times
@@ -170,9 +172,12 @@ class GamePatch:
         self.intend_hack: list[tuple[Literal["attacker", "defender"], int]] = (
             intend_hack if intend_hack is not None else []
         )
+        self.effects_to_consume: list[Effect] = (
+            list(effects_to_consume) if effects_to_consume is not None else []
+        )
 
     def __str__(self) -> str:
-        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}"
+        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}\nEffects to consume:{self.effects_to_consume}"
 
     def merge(self, other: GamePatch) -> GamePatch:
         """将另一个 patch 合并到当前 patch，同类伤害会叠加。"""
@@ -223,6 +228,8 @@ class GamePatch:
             player_state_changes=list(self.player_state_changes)
             + list(other.player_state_changes),
             intend_hack=merged_hack_list,
+            effects_to_consume=list(self.effects_to_consume)
+            + list(other.effects_to_consume),
         )
 
     @staticmethod
@@ -341,3 +348,7 @@ class GameContext:
             candidates.sort(key=lambda x: x[1], reverse=True)
             for index, _ in candidates[:count]:
                 target.selected_dice[index].now_value = 2
+
+        # 消耗效果（如连击触发后置死）
+        for effect in patch.effects_to_consume:
+            effect.alive = False

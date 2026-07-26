@@ -130,7 +130,8 @@ class Player:
         """角色遭受攻击后的行为，返回包含伤害与受击后效果的 GamePatch。
 
         力场（ForceFields）只免疫普通伤害（common），受击后效果仍然可以触发。
-        洞穿（Pierce）无视防御和力场效果
+        洞穿（Pierce）无视防御和力场效果。
+        连击（DoubleShot）的多次攻击由 GameManager 统一结算，本方法只计算一次攻击。
         """
         from .default import ForceFields, Pierce
 
@@ -153,7 +154,7 @@ class Player:
         damage_patch = GamePatch(
             damage=[{"role": self.role, "type": "common", "count": common_damage}]
         )
-        after_patch = self.after_being_attacked(view, hurts)
+        after_patch = self.after_being_attacked(view, common_damage)
         if after_patch is None:
             after_patch = GamePatch()
         return damage_patch.merge(after_patch)

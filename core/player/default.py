@@ -313,6 +313,32 @@ class YellowSpringPlayer(Player):
             )
 
 
+class FireflyPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            15, "流萤", 20, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        v_dict = {}
+        patchs = []
+        values = [dice.now_value for dice in self.selected_dice]
+        for v in values:
+            v_dict[v] = v_dict[v] + 1 if v_dict.get(v) else 1
+        times = 0
+        for v in v_dict.values():
+            times += int(v / 2)
+        if times >= 2:
+            patchs.append(
+                GamePatch(effects_to_add=[(self.role, DoubleShot(self, True))])
+            )
+        if self.hp == self.max_hp:
+            patchs.append(GamePatch(add_extra_attack=5))
+        return GamePatch.merge_all(patchs)
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -329,6 +355,7 @@ players = [
     TeamLeaderPlayer(),
     CastoricePlayer(),
     YellowSpringPlayer(),
+    FireflyPlayer(),
 ]
 
 
@@ -448,3 +475,8 @@ class AddDefenceLevel(Effect):
 class Pierce(Effect):
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("洞穿", False, master=master, clear=clear)
+
+
+class DoubleShot(Effect):
+    def __init__(self, master: Player, clear: bool = False):
+        super().__init__("连击", False, master, clear=clear)
