@@ -4,6 +4,8 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
+from .player.dice import Dice
+
 if TYPE_CHECKING:
     from ..main import GameManager
     from .player.effects import Effect
@@ -147,6 +149,7 @@ class GamePatch:
         | None = None,
         dice_value_changes: list[tuple[Literal["attacker", "defender"], int, int]]
         | None = None,
+        upgrade_dice_requests: list[Dice] | None = None,
         player_state_changes: list[tuple[Literal["attacker", "defender"], str, Any]]
         | None = None,
         intend_hack: list[tuple[Literal["attacker", "defender"], int]] | None = None,
@@ -166,6 +169,9 @@ class GamePatch:
         self.dice_value_changes: list[
             tuple[Literal["attacker", "defender"], int, int]
         ] = dice_value_changes if dice_value_changes is not None else []
+        self.upgrade_dice_requests: list[Dice] = (
+            upgrade_dice_requests if upgrade_dice_requests is not None else []
+        )
         self.player_state_changes: list[
             tuple[Literal["attacker", "defender"], str, Any]
         ] = player_state_changes if player_state_changes is not None else []
@@ -225,6 +231,9 @@ class GamePatch:
             effects_to_add=list(self.effects_to_add) + list(other.effects_to_add),
             dice_value_changes=list(self.dice_value_changes)
             + list(other.dice_value_changes),
+            upgrade_dice_requests=list(
+                set(self.upgrade_dice_requests + other.upgrade_dice_requests)
+            ),
             player_state_changes=list(self.player_state_changes)
             + list(other.player_state_changes),
             intend_hack=merged_hack_list,
@@ -331,6 +340,10 @@ class GameContext:
         for role, index, value in patch.dice_value_changes:
             target = self._get_player(role)
             target.selected_dice[index].now_value = value
+
+        # 升级骰子
+        for dice in patch.upgrade_dice_requests:
+            dice.upgrade()
 
         # 玩家自定义状态字段（如 TrafficLightPlayer 的 get_s_round）
         for role, attr, value in patch.player_state_changes:

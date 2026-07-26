@@ -339,6 +339,19 @@ class FireflyPlayer(Player):
         return GamePatch.merge_all(patchs)
 
 
+class RobinPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            16, "知更鸟", 30, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        for dice in self.selected_dice:
+            if dice.now_value % 2 != 0:
+                return
+        return GamePatch(upgrade_dice_requests=self.selected_dice)
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -356,6 +369,7 @@ players = [
     CastoricePlayer(),
     YellowSpringPlayer(),
     FireflyPlayer(),
+    RobinPlayer(),
 ]
 
 
