@@ -48,6 +48,8 @@ class Player:
         """镀闪次数"""
         self.special_dice = special_dice
         """可用的曜彩骰"""
+        self.use_spe_times = 2
+        """曜彩骰可用次数"""
         self.selected_dice: list[Dice] = []
         """选择的骰子，用于重投或者攻击/防御"""
         self.effects: list[Effect] = []
@@ -74,10 +76,14 @@ class Player:
         role: Literal["attack", "defence"],
         reload_times: int,
     ) -> bool:
-        if action != 1 and action != 2:
+        if action != 1 and action != 2 and action != 3:
             return False
-        if not selected:
+        if not selected and (action == 1 or action == 2):
             return False
+        if action == 3:
+            if self.use_spe_times <= 0:
+                return False
+            return not any(dice.special for dice in self.dices)
         if action == 2 and reload_times <= 0:
             return False
         if len(selected) != len(set(selected)):
@@ -100,7 +106,7 @@ class Player:
     ) -> tuple[int, list]:
         """
         Returns: tuple(action , list)
-            action(int):操作类型，1为确认 2为重投
+            action(int):操作类型，1为确认 2为重投 3使用曜彩骰
             act_list(list):操作骰子列表
         """
         if self.is_agent:
@@ -122,7 +128,7 @@ class Player:
                     ).split(),
                 )
             )
-            action = int(input("输入你的行为（1为确认2为重投）"))
+            action = int(input("输入你的行为（1为确认2为重投3为使用曜彩骰）"))
         assert action is not None
         return action, select_list
 

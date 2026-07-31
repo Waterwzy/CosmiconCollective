@@ -8,6 +8,8 @@ from .dice import Dice
 from .effects import Effect
 from .player import Player
 
+# =====玩家定义部分=====
+
 
 class DefaultPlayer(Player):
     def __init__(self) -> None:
@@ -373,6 +375,9 @@ players = [
 ]
 
 
+# =====效果定义部分=====
+
+
 class Hack(Effect):
     def __init__(self, master: Player) -> None:
         super().__init__("骇入", False, master)
@@ -494,3 +499,27 @@ class Pierce(Effect):
 class DoubleShot(Effect):
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("连击", False, master, clear=clear)
+
+
+# =====曜彩骰定义部分=====
+
+
+class RealSixSixDice(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 6},
+            ],
+        )
+
+
+special_dices = [
+    RealSixSixDice(),
+]

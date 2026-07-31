@@ -1,6 +1,13 @@
+from __future__ import annotations
+
 import random
+from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from ..context import GameView
+    from .effects import Effect
 
 
 class Dice:
@@ -18,7 +25,7 @@ class Dice:
         # 样式示例：列表长度需要为6，例如[{"effect":"some_effect","value":8},{},...]
         self.now_value: int = 0
         """目前骰子的面数"""
-        self.now_effect = None
+        self.now_effect: None | Effect = None
         """目前的效果，无则为None"""
 
     def __str__(self) -> str:
@@ -27,9 +34,8 @@ class Dice:
         else:
             return f"普通骰子，当前点数为{self.now_value}/{self.sides}"
 
-    def effect(self, *args, **kwargs):
-        """曜彩骰的特殊效果，子类可以重写这个方法"""
-        return
+    def __repr__(self) -> str:
+        return self.__str__()
 
     def upgrade(self):
         if self.special:
@@ -55,3 +61,6 @@ class Dice:
                 self.now_value = random.randint(1, self.sides)
             else:
                 self.now_value = random.randint(1, self.sides - 1)
+
+    def can_use(self, view: GameView):
+        """描述曜彩骰是否可用，子类重写此方法"""

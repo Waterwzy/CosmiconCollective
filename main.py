@@ -1,8 +1,8 @@
 import random
-from typing import Literal
+from typing import Literal, cast
 
 from core.context import GameContext, GamePatch
-from core.player.default import DefaultAIPlayer, DoubleShot, players
+from core.player.default import DefaultAIPlayer, DoubleShot, players, special_dices
 from core.player.player import Player
 
 
@@ -51,6 +51,51 @@ class GameManager:
     def _is_win(self) -> bool:
         return self.attacker.hp <= 0 or self.defender.hp <= 0
 
+    def select_dice(self, target: Player, state: Literal["attack", "defence"]):
+        target.dices = [dice for dice in target.dices if not dice.special]
+
+        for dice in target.dices:
+            dice.load(target.load_max)
+
+        self.reload_times = 2 if state == "attack" else 0
+        act = None
+        selected = []
+
+        target.attack_dice = target.ori_attack_dices
+        target.defence_dice = target.ori_denfece_dices
+        self.effect_hook.before_select(self.context)
+        print(f"{state}可用重投次数{self.reload_times}")
+
+        while True:
+            print(f"{state}骰子为{[dice for dice in target.dices]}")
+            act, selected = target.select_dice(state, self.reload_times)
+            if act == 1:
+                break
+            elif act == 2:
+                self.context.apply_patch(GamePatch(add_reload_times=-1))
+                for i in selected:
+                    target.dices[i].load(target.load_max)
+            elif act == 3 and target.special_dice:
+                target.use_spe_times -= 1
+                target.dices.append(target.special_dice)
+                target.dices[-1].load(target.load_max)
+
+        print(f"{state}选择的骰子为：{[str(target.dices[i]) for i in selected]}")
+        target.selected_dice = [target.dices[i] for i in selected]
+
+        for dice in target.selected_dice:
+            if dice.special and dice.now_effect:
+                self.context.apply_patch(
+                    GamePatch(
+                        effects_to_add=[
+                            (
+                                cast(Literal["attacker", "defender"], target.role),
+                                dice.now_effect,
+                            )
+                        ]
+                    )
+                )
+
     def start_round(self):
         self.state = "begin"
 
@@ -72,34 +117,7 @@ class GameManager:
 
         self.state = "attack"
 
-        for dice in self.attacker.dices:
-            dice.load(self.attacker.load_max)
-
-        self.reload_times = 2
-        act = None
-        attack_selected = []
-
-        self.attacker.attack_dice = self.attacker.ori_attack_dices
-        self.attacker.defence_dice = self.attacker.ori_denfece_dices
-        self.effect_hook.before_select(self.context)
-        print(f"攻击方可用重投次数：{self.reload_times}")
-
-        while True:
-            print(f"攻击方骰子为：{[str(dice) for dice in self.attacker.dices]}")
-            act, attack_selected = self.attacker.select_dice(
-                "attack", self.reload_times
-            )
-            if act == 1:
-                break
-            elif act == 2:
-                self.context.apply_patch(GamePatch(add_reload_times=-1))
-                for i in attack_selected:
-                    self.attacker.dices[i].load(self.attacker.load_max)
-
-        print(
-            f"攻击方选择的骰子为：{[str(self.attacker.dices[i]) for i in attack_selected]}"
-        )
-        self.attacker.selected_dice = [self.attacker.dices[i] for i in attack_selected]
+        self.select_dice(self.attacker, self.state)
 
         ap = self.attacker.after_attack_sum(self.context.create_view())
         if ap:
@@ -107,37 +125,7 @@ class GameManager:
 
         self.state = "defence"
 
-        for dice in self.defender.dices:
-            dice.load(self.defender.load_max)
-
-        self.reload_times = 0
-        act = None
-        defence_selected = []
-
-        dp = self.defender.before_defence_select(self.context.create_view())
-        if dp:
-            self.context.apply_patch(dp)
-        self.defender.attack_dice = self.defender.ori_attack_dices
-        self.defender.defence_dice = self.defender.ori_denfece_dices
-        self.effect_hook.before_select(self.context)
-        print(f"防御方可用重投次数：{self.reload_times}")
-
-        while True:
-            print(f"防御方骰子为：{[str(dice) for dice in self.defender.dices]}")
-            act, defence_selected = self.defender.select_dice(
-                "defence", self.reload_times
-            )
-            if act == 1:
-                break
-            elif act == 2:
-                self.context.apply_patch(GamePatch(add_reload_times=-1))
-                for i in defence_selected:
-                    self.defender.dices[i].load(self.defender.load_max)
-
-        print(
-            f"防御方选择的骰子为：{[str(self.defender.dices[i]) for i in defence_selected]}"
-        )
-        self.defender.selected_dice = [self.defender.dices[i] for i in defence_selected]
+        self.select_dice(self.defender, self.state)
 
         dsp = self.defender.after_defence_sum(self.context.create_view())
         if dsp:
@@ -258,11 +246,16 @@ class EffectHookManager:
 if __name__ == "__main__":
     selected_player = -1
     while (
-        isinstance(selected_player, int)
-        and (selected_player < 0 or selected_player >= len(players))
-        and selected_player != 1
-    ):
+        selected_player < 0 or selected_player >= len(players)
+    ) and selected_player != 1:
         selected_player = int(input(f"请选择你的角色（输入数字）：\n{players}\n"))
+    selected_spe_dice = -1
+    while selected_spe_dice < 0 or selected_spe_dice >= len(special_dices):
+        selected_spe_dice = int(
+            input(f"请选择你的曜彩骰（输入index）:\n{special_dices}\n")
+        )
+    players[selected_player].special_dice = special_dices[selected_spe_dice]
     game = GameManager(players[selected_player], DefaultAIPlayer())
     del players
+    del special_dices
     game.main()
