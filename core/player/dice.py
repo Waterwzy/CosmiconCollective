@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from ..context import GamePatch
+
 if TYPE_CHECKING:
-    from ..context import GameView, GamePatch
+    from ..context import GameView
     from .effects import Effect
     from .player import Player
 
@@ -30,7 +32,7 @@ class Dice:
         # 样式示例：列表长度需要为6，例如[{"effect":"some_effect","value":8},{},...]
         self.now_value: int = 0
         """目前骰子的面数"""
-        self.now_effect: None | Type[Effect] = None
+        self.now_effect: None | type[Effect] = None
         """目前的效果，无则为None"""
         self.name: None | str = name
         """曜彩骰的名称"""

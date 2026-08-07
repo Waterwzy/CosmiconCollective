@@ -559,9 +559,7 @@ class RealRepeat(Dice):
     def can_use(self, view: GameView) -> bool:
         if not self.master:
             return False
-        if self.master.role == "attacker" and self.chose_four >= 2:
-            return True
-        return False
+        return bool(self.master.role == "attacker" and self.chose_four >= 2)
 
     def trigger_dice(self) -> GamePatch:
         if not self.master or not self.master.role:
