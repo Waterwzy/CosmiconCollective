@@ -39,7 +39,7 @@ class PlayerView:
         return self._player.defence_dice
 
     @property
-    def dices(self) -> tuple:
+    def dices(self) -> tuple[Dice, ...]:
         """返回当前可用骰子的只读元组。"""
         return tuple(self._player.dices)
 

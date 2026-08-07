@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 from loguru import logger
 
 if TYPE_CHECKING:
-    from ..context import GameView
+    from ..context import GameView, GamePatch
     from .effects import Effect
+    from .player import Player
 
 
 class Dice:
     """骰子数据，可以是曜彩骰"""
 
     def __init__(
-        self, sides: int, special: bool = False, details: list[dict] | None = None
+        self,
+        sides: int,
+        special: bool = False,
+        details: list[dict] | None = None,
+        name: str | None = None,
     ) -> None:
         self.sides = sides
         """骰子的面数"""
@@ -25,12 +30,15 @@ class Dice:
         # 样式示例：列表长度需要为6，例如[{"effect":"some_effect","value":8},{},...]
         self.now_value: int = 0
         """目前骰子的面数"""
-        self.now_effect: None | Effect = None
+        self.now_effect: None | Type[Effect] = None
         """目前的效果，无则为None"""
+        self.name: None | str = name
+        """曜彩骰的名称"""
+        self.master: None | Player = None
 
     def __str__(self) -> str:
         if self.special:
-            return f"曜彩骰，当前点数为{self.now_value}，当前效果为{self.now_effect}"
+            return f"曜彩骰{self.name}，当前点数为{self.now_value}，当前效果为{self.now_effect}"
         else:
             return f"普通骰子，当前点数为{self.now_value}/{self.sides}"
 
@@ -62,5 +70,13 @@ class Dice:
             else:
                 self.now_value = random.randint(1, self.sides - 1)
 
-    def can_use(self, view: GameView):
+    def can_use(self, view: GameView) -> bool:
         """描述曜彩骰是否可用，子类重写此方法"""
+        return True
+
+    def trigger_dice(self) -> GamePatch:
+        """曜彩骰触发效果"""
+        return GamePatch()
+
+    def before_sum(self, view: GameView):
+        return

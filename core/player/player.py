@@ -61,7 +61,7 @@ class Player:
         self.load_max = load_max
         """骰子是否可以投出最大值"""
         self.attack_in_round = False
-        """当前回合中是否收到伤害"""
+        """当前回合中是否受到伤害"""
 
     def __str__(self) -> str:
         return f"{self.id}(pid:{self.pid})"
@@ -75,6 +75,7 @@ class Player:
         action: int | None,
         role: Literal["attack", "defence"],
         reload_times: int,
+        view: GameView,
     ) -> bool:
         if action != 1 and action != 2 and action != 3:
             return False
@@ -82,6 +83,10 @@ class Player:
             return False
         if action == 3:
             if self.use_spe_times <= 0:
+                return False
+            if not self.special_dice:
+                return False
+            if not self.special_dice.can_use(view):
                 return False
             return not any(dice.special for dice in self.dices)
         if action == 2 and reload_times <= 0:
@@ -102,7 +107,7 @@ class Player:
         )
 
     def select_dice(
-        self, role: Literal["attack", "defence"], reload_times: int
+        self, role: Literal["attack", "defence"], reload_times: int, view: GameView
     ) -> tuple[int, list]:
         """
         Returns: tuple(action , list)
@@ -119,7 +124,7 @@ class Player:
             )
         select_list = []
         action = None
-        while not self._legal_select(select_list, action, role, reload_times):
+        while not self._legal_select(select_list, action, role, reload_times, view):
             select_list = list(
                 map(
                     int,

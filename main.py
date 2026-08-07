@@ -1,5 +1,5 @@
 import random
-from typing import Literal, cast
+from typing import Literal
 
 from core.context import GameContext, GamePatch
 from core.player.default import DefaultAIPlayer, DoubleShot, players, special_dices
@@ -13,7 +13,7 @@ class GameManager:
         self.round = 1
         self.attacker_extra_sum = 0
         self.defender_extra_sum = 0
-        self.effect_hook = EffectHookManager()
+        self.effect_hook = HookManager()
         self.reload_times = 0
         self.state: Literal["begin", "attack", "defence", "sum"] | None = None
         self.context = GameContext(self)
@@ -60,6 +60,7 @@ class GameManager:
         self.reload_times = 2 if state == "attack" else 0
         act = None
         selected = []
+        before_select_view = self.context.create_view()
 
         target.attack_dice = target.ori_attack_dices
         target.defence_dice = target.ori_denfece_dices
@@ -68,7 +69,9 @@ class GameManager:
 
         while True:
             print(f"{state}骰子为{[dice for dice in target.dices]}")
-            act, selected = target.select_dice(state, self.reload_times)
+            act, selected = target.select_dice(
+                state, self.reload_times, before_select_view
+            )
             if act == 1:
                 break
             elif act == 2:
@@ -85,16 +88,7 @@ class GameManager:
 
         for dice in target.selected_dice:
             if dice.special and dice.now_effect:
-                self.context.apply_patch(
-                    GamePatch(
-                        effects_to_add=[
-                            (
-                                cast(Literal["attacker", "defender"], target.role),
-                                dice.now_effect,
-                            )
-                        ]
-                    )
-                )
+                self.context.apply_patch(dice.trigger_dice())
 
     def start_round(self):
         self.state = "begin"
@@ -187,6 +181,14 @@ class GameManager:
 
     def main(self):
         start_patches = []
+        for dice in self.players[0].dices:
+            dice.master = self.players[0]
+        for dice in self.players[1].dices:
+            dice.master = self.players[1]
+        if self.players[0].special_dice:
+            self.players[0].special_dice.master = self.players[0]
+        if self.players[1].special_dice:
+            self.players[1].special_dice.master = self.players[1]
         start_view = self.context.create_view()
         dp = self.defender.on_game_start(start_view)
         ap = self.attacker.on_game_start(start_view)
@@ -199,7 +201,12 @@ class GameManager:
             self.start_round()
 
 
-class EffectHookManager:
+class HookManager:
+    """管理效果和曜彩骰的触发
+    对于效果主要是生成Game Patch
+    对于曜彩骰则是计数，做内部使用
+    """
+
     def __init__(self) -> None:
         pass
 
@@ -215,6 +222,10 @@ class EffectHookManager:
             if p:
                 patches.append(p)
         context.apply_patch(GamePatch.merge_all(patches))
+        if view.attacker.special_dice:
+            view.attacker.special_dice.before_sum(view)
+        if view.defender.special_dice:
+            view.defender.special_dice.before_sum(view)
 
     def after_settlement(self, context: GameContext):
         view = context.create_view()

@@ -318,7 +318,7 @@ class YellowSpringPlayer(Player):
 class FireflyPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            15, "流萤", 20, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)]
+            15, "流萤", 28, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)]
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -352,6 +352,17 @@ class RobinPlayer(Player):
             if dice.now_value % 2 != 0:
                 return
         return GamePatch(upgrade_dice_requests=self.selected_dice)
+
+
+class BigHertaPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            17, "大黑塔", 42, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+        )
+        self.use_spe = 0
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        self.use_spe_times += 1
 
 
 players = [
@@ -517,9 +528,53 @@ class RealSixSixDice(Dice):
                 {"effect": None, "value": 6},
                 {"effect": None, "value": 6},
             ],
+            "真·666",
         )
+
+
+class RealRepeat(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 4},
+                {"effect": DoubleShot, "value": 4},
+                {"effect": DoubleShot, "value": 4},
+            ],
+            "真·复读",
+        )
+        self.chose_four = 0
+
+    def before_sum(self, view: GameView):
+        if not self.master:
+            return
+        for dice in self.master.selected_dice:
+            if dice.now_value == 4:
+                self.chose_four += 1
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        if self.master.role == "attacker" and self.chose_four >= 2:
+            return True
+        return False
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == DoubleShot:
+            return GamePatch(
+                effects_to_add=[(self.master.role, DoubleShot(self.master, True))]
+            )
+        else:
+            return GamePatch()
 
 
 special_dices = [
     RealSixSixDice(),
+    RealRepeat(),
 ]
