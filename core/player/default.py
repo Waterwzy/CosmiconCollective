@@ -375,6 +375,23 @@ class BigHertaPlayer(Player):
         return self.after_attack_sum(view)
 
 
+class KafukaPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            18, "卡芙卡", 30, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        values = [dice.now_value for dice in self.selected_dice]
+        return GamePatch(
+            effects_to_add=[("attacker", Poisoning(self, len(set(values))))]
+        )
+
+    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        if hp_sum > 0:
+            return GamePatch(effects_to_add=[("defender", Poisoning(self, -1))])
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -394,6 +411,7 @@ players = [
     FireflyPlayer(),
     RobinPlayer(),
     BigHertaPlayer(),
+    KafukaPlayer(),
 ]
 
 
