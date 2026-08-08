@@ -178,21 +178,32 @@ class Player:
     def _rm_outdate_effects(self):
         self.effects = [eff for eff in self.effects if eff.alive]
 
-    def add_effect(self, effect: Effect) -> bool:
+    def add_effect(self, effect: Effect) -> tuple[bool, GamePatch]:
         """添加效果。若目标已有同类可叠加且存活的效果，则叠加层数并返回 False；否则新增实例并返回 True。"""
         self._rm_outdate_effects()
         if effect.addable:
+            b = True
+            p = GamePatch()
             for eff in self.effects:
                 if isinstance(eff, type(effect)) and eff.alive:
                     eff.layer += effect.layer
                     if eff.layer <= 0:
                         eff.alive = False
-                    return False
-            self.effects.append(effect)
-            return True
+                        return False, GamePatch()
+                    b = False
+                    op = self.on_layer_change([(eff, eff.layer)])
+                    p = p.merge(op) if op else p
+                    break
+            if effect.layer <= 0:
+                return False, GamePatch()
+            if b:
+                self.effects.append(effect)
+                op = self.on_layer_change([(effect, effect.layer)])
+                p = p.merge(op) if op else p
+            return (b, p)
         else:
             self.effects.append(effect)
-            return True
+            return (True, GamePatch())
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
         pass
@@ -216,4 +227,9 @@ class Player:
         pass
 
     def after_settlement(self, view: GameView) -> GamePatch | None:
+        pass
+
+    def on_layer_change(
+        self, changes: list[tuple[Effect, int]]
+    ) -> GamePatch | None:  # int 值为改变后的层数
         pass

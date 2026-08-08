@@ -392,6 +392,34 @@ class KafukaPlayer(Player):
             return GamePatch(effects_to_add=[("defender", Poisoning(self, -1))])
 
 
+class AventurinePlayer(Player):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__(
+            19, "砂金", 33, 4, 2, [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        s = 0
+        for dice in self.selected_dice:
+            if dice.now_value % 2 == 1:
+                s += 1
+        return GamePatch(effects_to_add=[("attacker", Resilience(self, s))])
+
+    def on_layer_change(self, changes: list[tuple[Effect, int]]) -> GamePatch | None:
+        if not self.role:
+            return GamePatch()
+        for item in changes:
+            if isinstance(item[0], Resilience) and item[1] >= 7:
+                return GamePatch(
+                    effects_to_add=[
+                        (self.role, Resilience(self, -7)),
+                        (self.role, InstantDamage(self, 7)),
+                    ]
+                )
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -412,6 +440,7 @@ players = [
     RobinPlayer(),
     BigHertaPlayer(),
     KafukaPlayer(),
+    AventurinePlayer(),
 ]
 
 
@@ -562,6 +591,16 @@ class Thorn(Effect):
         return GamePatch(
             damage=[{"type": "thorn", "count": self.layer, "role": self.master.role}]
         )
+
+
+class Resilience(Effect):
+    def __init__(self, master: Player, layer: int = 0, clear: bool = False):
+        super().__init__("韧性", True, master, layer, clear)
+
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if self.master.role != "defender":
+            return GamePatch()
+        return GamePatch(add_extra_defence=self.layer)
 
 
 # =====曜彩骰定义部分=====

@@ -189,6 +189,27 @@ class GamePatch:
     def __str__(self) -> str:
         return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}\nEffects to consume:{self.effects_to_consume}"
 
+    def __bool__(self):
+        return any(
+            [
+                self.damage,
+                self.add_reload_times,
+                self.add_extra_attack,
+                self.add_extra_defence,
+                self.add_attacker_hp,
+                self.add_defender_hp,
+                self.add_attack_dice,
+                self.add_defence_dice,
+                self.effects_to_add,
+                self.dice_value_changes,
+                self.upgrade_dice_requests,
+                self.player_state_changes,
+                self.intend_hack,
+                self.intend_leap,
+                self.effects_to_consume,
+            ]
+        )
+
     def merge(self, other: GamePatch) -> GamePatch:
         """将另一个 patch 合并到当前 patch，同类伤害会叠加。"""
         merged_damage: list[DamageDict] = []
@@ -283,6 +304,9 @@ class GameContext:
 
     def apply_patch(self, patch: GamePatch) -> None:
         """将一个（已合并的）GamePatch 应用到 GameManager。"""
+        if not patch:
+            return
+
         # 伤害
         for dam in patch.damage:
             target = self._get_player(dam["role"])
@@ -334,11 +358,17 @@ class GameContext:
 
         # 新增效果：可叠加且目标已有同类效果时直接叠加层数，否则新增实例
         newly_added_effects: list[Effect] = []
+        np = GamePatch()
         for role, effect in patch.effects_to_add:
             target = self._get_player(role)
             effect.master = target
-            if target.add_effect(effect):
+            b, p = target.add_effect(effect)
+            np = np.merge(p)
+            if b:
                 newly_added_effects.append(effect)
+
+        if np:
+            self.apply_patch(np)
 
         if newly_added_effects:
             view = self.create_view()
