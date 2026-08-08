@@ -128,7 +128,7 @@ class GameView:
 
 class DamageDict(TypedDict):
     role: Literal["attacker", "defender"]
-    type: Literal["common", "poisoning", "instant"]
+    type: Literal["common", "poisoning", "instant", "thorn"]
     count: int
 
 
@@ -153,6 +153,7 @@ class GamePatch:
         player_state_changes: list[tuple[Literal["attacker", "defender"], str, Any]]
         | None = None,
         intend_hack: list[tuple[Literal["attacker", "defender"], int]] | None = None,
+        intend_leap: list[tuple[Literal["attacker", "defender"], int]] | None = None,
         effects_to_consume: Sequence[Effect] | None = None,
     ) -> None:
         self.damage: list[DamageDict] = damage if damage is not None else []
@@ -177,6 +178,9 @@ class GamePatch:
         ] = player_state_changes if player_state_changes is not None else []
         self.intend_hack: list[tuple[Literal["attacker", "defender"], int]] = (
             intend_hack if intend_hack is not None else []
+        )
+        self.intend_leap: list[tuple[Literal["attacker", "defender"], int]] = (
+            intend_leap if intend_leap is not None else []
         )
         self.effects_to_consume: list[Effect] = (
             list(effects_to_consume) if effects_to_consume is not None else []
@@ -215,6 +219,15 @@ class GamePatch:
             (role, count) for role, count in merged_hack.items()
         ]
 
+        merged_leap: dict[Literal["attacker", "defender"], int] = {}
+        for role, count in self.intend_leap:
+            merged_leap[role] = merged_leap.get(role, 0) + count
+        for role, count in other.intend_leap:
+            merged_leap[role] = merged_leap.get(role, 0) + count
+        merged_leap_list: list[tuple[Literal["attacker", "defender"], int]] = [
+            (role, count) for role, count in merged_leap.items()
+        ]
+
         return GamePatch(
             damage=merged_damage,
             add_reload_times=self.add_reload_times + other.add_reload_times,
@@ -237,6 +250,7 @@ class GamePatch:
             player_state_changes=list(self.player_state_changes)
             + list(other.player_state_changes),
             intend_hack=merged_hack_list,
+            intend_leap=merged_leap_list,
             effects_to_consume=list(self.effects_to_consume)
             + list(other.effects_to_consume),
         )
@@ -361,6 +375,19 @@ class GameContext:
             candidates.sort(key=lambda x: x[1], reverse=True)
             for index, _ in candidates[:count]:
                 target.selected_dice[index].now_value = 2
+
+        for role, count in patch.intend_leap:
+            target = self._get_player(role)
+            for _ in range(count):
+                candidates = [
+                    (i, dice.now_value)
+                    for i, dice in enumerate(target.selected_dice)
+                    if not dice.special
+                ]
+                candidates.sort(key=lambda x: x[1])
+                target.selected_dice[candidates[0][0]].now_value = target.selected_dice[
+                    candidates[0][0]
+                ].sides
 
         # 消耗效果（如连击触发后置死）
         for effect in patch.effects_to_consume:

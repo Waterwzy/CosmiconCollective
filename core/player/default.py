@@ -364,6 +364,16 @@ class BigHertaPlayer(Player):
     def after_settlement(self, view: GameView) -> GamePatch | None:
         self.use_spe_times += 1
 
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return GamePatch()
+        e = [type(effect) for effect in self.effects if effect.alive]
+        if not Leap in e and self.use_spe >= 4:
+            return GamePatch(effects_to_add=[(self.role, Leap(self))])
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        return self.after_attack_sum(view)
+
 
 players = [
     DefaultPlayer(),
@@ -383,6 +393,7 @@ players = [
     YellowSpringPlayer(),
     FireflyPlayer(),
     RobinPlayer(),
+    BigHertaPlayer(),
 ]
 
 
@@ -512,6 +523,29 @@ class DoubleShot(Effect):
         super().__init__("连击", False, master, clear=clear)
 
 
+class Leap(Effect):
+    def __init__(self, master: Player, clear: bool = False):
+        super().__init__("跃升", False, master, clear=clear)
+
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if not self.master.role:
+            return GamePatch()
+        return GamePatch(intend_leap=[(self.master.role, 1)])
+
+
+class Thorn(Effect):
+    def __init__(self, master: Player, layer: int = 0):
+        super().__init__("荆棘", True, master, layer=layer)
+
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if not self.master.role:
+            return GamePatch()
+        self.alive = False
+        return GamePatch(
+            damage=[{"type": "thorn", "count": self.layer, "role": self.master.role}]
+        )
+
+
 # =====曜彩骰定义部分=====
 
 
@@ -572,7 +606,38 @@ class RealRepeat(Dice):
             return GamePatch()
 
 
+class RealWarManiac(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 4},
+                {"effect": Thorn, "value": 8},
+                {"effect": Thorn, "value": 8},
+                {"effect": Thorn, "value": 12},
+                {"effect": Thorn, "value": 12},
+            ],
+            "真·战狂",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if (
+            not self.master
+            or not self.master.role
+            or (self.now_value != 8 and self.now_value != 12)
+        ):
+            return GamePatch()
+        if self.now_value == 8:
+            return GamePatch(effects_to_add=[(self.master.role, Thorn(self.master, 2))])
+        elif self.now_value == 12:
+            return GamePatch(effects_to_add=[(self.master.role, Thorn(self.master, 3))])
+        return GamePatch()
+
+
 special_dices = [
     RealSixSixDice(),
     RealRepeat(),
+    RealWarManiac(),
 ]

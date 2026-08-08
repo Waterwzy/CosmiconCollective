@@ -88,6 +88,8 @@ class GameManager:
 
         for dice in target.selected_dice:
             if dice.special and dice.now_effect:
+                if hasattr(target, "use_spe"):
+                    target.use_spe += 1  # type: ignore
                 self.context.apply_patch(dice.trigger_dice())
 
     def start_round(self):

@@ -5,10 +5,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from ..context import GamePatch
-
 if TYPE_CHECKING:
-    from ..context import GameView
+    from ..context import GamePatch, GameView
     from .effects import Effect
     from .player import Player
 
@@ -78,6 +76,8 @@ class Dice:
 
     def trigger_dice(self) -> GamePatch:
         """曜彩骰触发效果"""
+        from ..context import GamePatch
+
         return GamePatch()
 
     def before_sum(self, view: GameView):
