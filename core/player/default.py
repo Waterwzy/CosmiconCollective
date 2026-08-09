@@ -393,9 +393,7 @@ class KafukaPlayer(Player):
 
 
 class AventurinePlayer(Player):
-    def __init__(
-        self,
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__(
             19, "砂金", 33, 4, 2, [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)]
         )
@@ -420,6 +418,28 @@ class AventurinePlayer(Player):
                 )
 
 
+class MartchSeventhPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            20, "三月七", 25, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return GamePatch()
+        v_list = [dice.now_value for dice in self.selected_dice]
+        v_dict = {}
+        for v in v_list:
+            v_dict[v] = v_dict.get(v, 0) + 1
+        dam = 0
+        for times in v_dict.values():
+            dam += 3 * int(times / 2)
+        return GamePatch(effects_to_add=[(self.role, InstantDamage(self, dam))])
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        return self.after_attack_sum(view)
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -441,6 +461,7 @@ players = [
     BigHertaPlayer(),
     KafukaPlayer(),
     AventurinePlayer(),
+    MartchSeventhPlayer(),
 ]
 
 
