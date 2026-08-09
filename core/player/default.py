@@ -469,6 +469,23 @@ class DesolateDanHengPlayer(Player):
         )
 
 
+class KleSparPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            22, "火花", 22, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return GamePatch()
+        vs = [dice.now_value for dice in self.selected_dice]
+        if len(vs) != len(set(vs)):
+            return GamePatch(effects_to_add=[(self.role, Hack(self))])
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        return self.after_attack_sum(view)
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -492,6 +509,7 @@ players = [
     AventurinePlayer(),
     MartchSeventhPlayer(),
     DesolateDanHengPlayer(),
+    KleSparPlayer(),
 ]
 
 
