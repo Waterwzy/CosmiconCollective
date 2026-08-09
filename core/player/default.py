@@ -440,6 +440,35 @@ class MartchSeventhPlayer(Player):
         return self.after_attack_sum(view)
 
 
+class DesolateDanHengPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            21, "丹恒·腾荒", 25, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+        )
+        self.round_add_denfece = -1
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        if self.role == "defender" and self.round_add_denfece == view.round:
+            self.round_add_denfece = -1
+            return GamePatch(effects_to_add=[(self.role, AddDefenceLevel(self, -3))])
+        if self.role != "attacker":
+            return
+
+        if view.attacker_sum + view.attacker_extra_sum >= 18:
+            self.round_add_denfece = view.round + 1
+
+    def round_start(self, view: GameView) -> GamePatch | None:
+        if view.round != self.round_add_denfece or self.role != "defender":
+            return
+
+        return GamePatch(
+            effects_to_add=[
+                (self.role, AddDefenceLevel(self, 3)),
+                (self.role, Counterattack(self, True)),
+            ]
+        )
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -462,6 +491,7 @@ players = [
     KafukaPlayer(),
     AventurinePlayer(),
     MartchSeventhPlayer(),
+    DesolateDanHengPlayer(),
 ]
 
 
@@ -622,6 +652,31 @@ class Resilience(Effect):
         if self.master.role != "defender":
             return GamePatch()
         return GamePatch(add_extra_defence=self.layer)
+
+
+class Counterattack(Effect):
+    def __init__(self, master: Player, clear: bool = False):
+        super().__init__("反击", False, master, clear=clear)
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        if self.master.role != "defender":
+            return
+        ex_defence_num = (
+            view.defender_sum
+            + view.defender_extra_sum
+            - view.attacker_sum
+            - view.attacker_extra_sum
+        )
+        if ex_defence_num > 0:
+            return GamePatch(
+                damage=[
+                    {
+                        "role": "attacker",
+                        "type": "counterattack",
+                        "count": ex_defence_num,
+                    }
+                ]
+            )
 
 
 # =====曜彩骰定义部分=====
