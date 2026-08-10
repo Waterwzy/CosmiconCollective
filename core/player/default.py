@@ -575,7 +575,45 @@ class PhainonPlayer(Player):
             return GamePatch(effects_to_add=[(self.role, Unyield(self, True))])
 
 
-players = [
+class HyacinePlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            26, "风堇", 28, 2, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(8)]
+        )
+
+    def _get_strength_layers(self):
+        for eff in self.effects:
+            if isinstance(eff, Strength) and eff.alive:
+                return eff.layer
+        return 0
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return
+        all_sum = view.attacker_sum + view.attacker_extra_sum
+        if all(dice.now_value == 6 for dice in self.selected_dice):
+            return GamePatch(
+                effects_to_add=[
+                    (
+                        self.role,
+                        Strength(self, all_sum - self._get_strength_layers(), False),
+                    ),
+                    (self.role, Recover(self, 6)),
+                ]
+            )
+        return GamePatch(
+            effects_to_add=[
+                (
+                    self.role,
+                    Strength(
+                        self, int(all_sum / 2) - self._get_strength_layers(), False
+                    ),
+                )
+            ]
+        )
+
+
+players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
     ChimeraPlayer(),
@@ -602,6 +640,7 @@ players = [
     YaoGuangPlayer(),
     CyrenePlayer(),
     PhainonPlayer(),
+    HyacinePlayer(),
 ]
 
 
