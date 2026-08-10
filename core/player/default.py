@@ -517,6 +517,43 @@ class YaoGuangPlayer(Player):
             )
 
 
+class CyrenePlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            24, "昔涟", 30, 3, 2, [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)]
+        )
+        self.all_sum = 0
+
+    def after_settlement(self, view: GameView) -> GamePatch | None:
+        if self.role == "attacker":
+            self.all_sum += view.attacker_sum + view.attacker_extra_sum
+        if self.role == "defender":
+            self.all_sum += view.defender_sum + view.defender_extra_sum
+
+    def round_start(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        if self.all_sum >= 24 and not Leap in [type(effect) for effect in self.effects]:
+            return GamePatch(effects_to_add=[(self.role, Leap(self))])
+
+    def _get_attack_layer(self):
+        l = self.ori_attack_dices
+        for eff in self.effects:
+            if isinstance(eff, AddAttackLevel) and eff.alive:
+                l += eff.layer
+        return l
+
+    def before_attack_select(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        if self.all_sum >= 24:
+            return GamePatch(
+                effects_to_add=[
+                    (self.role, AddAttackLevel(self, 5 - self._get_attack_layer()))
+                ]
+            )
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -542,6 +579,7 @@ players = [
     DesolateDanHengPlayer(),
     KleSparPlayer(),
     YaoGuangPlayer(),
+    CyrenePlayer(),
 ]
 
 

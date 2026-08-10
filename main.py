@@ -60,10 +60,12 @@ class GameManager:
         self.reload_times = 2 if state == "attack" else 0
         act = None
         selected = []
-        before_select_view = self.context.create_view()
 
         target.attack_dice = target.ori_attack_dices
         target.defence_dice = target.ori_denfece_dices
+
+        before_select_view = self.context.create_view()
+
         patch = GamePatch()
         if target.role == "attacker":
             patch = target.before_attack_select(before_select_view)
