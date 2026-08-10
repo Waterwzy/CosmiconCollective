@@ -52,12 +52,12 @@ class PlayerView:
         return self._player.special_dice
 
     @property
-    def selected_dice(self) -> tuple:
+    def selected_dice(self) -> tuple[Dice, ...]:
         """返回已选择骰子的只读元组。"""
         return tuple(self._player.selected_dice)
 
     @property
-    def effects(self) -> tuple:
+    def effects(self) -> tuple[Effect, ...]:
         """返回效果列表的只读元组。"""
         return tuple(self._player.effects)
 

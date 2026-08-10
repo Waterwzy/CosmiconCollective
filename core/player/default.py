@@ -486,6 +486,37 @@ class KleSparPlayer(Player):
         return self.after_attack_sum(view)
 
 
+class YaoGuangPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            23, "爻光", 35, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+        )
+        self.reload_this_round = 0
+
+    def before_attack_select(self, view: GameView) -> GamePatch | None:
+        return GamePatch(add_reload_times=4 - view.reload_times)
+
+    def round_start(self, view: GameView) -> GamePatch | None:
+        self.reload_this_round = 0
+
+    def after_reload(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return
+        self.reload_this_round += 1
+        if self.reload_this_round > 2:
+            return GamePatch(effects_to_add=[(self.role, Thorn(self, 2))])
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if view.attacker_sum + view.attacker_extra_sum >= 18:
+            return GamePatch(
+                effects_to_consume=[
+                    effect
+                    for effect in self.effects
+                    if effect.alive and isinstance(effect, Thorn)
+                ]
+            )
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -510,6 +541,7 @@ players = [
     MartchSeventhPlayer(),
     DesolateDanHengPlayer(),
     KleSparPlayer(),
+    YaoGuangPlayer(),
 ]
 
 

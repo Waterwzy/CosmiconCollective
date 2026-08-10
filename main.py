@@ -64,8 +64,16 @@ class GameManager:
 
         target.attack_dice = target.ori_attack_dices
         target.defence_dice = target.ori_denfece_dices
+        patch = GamePatch()
+        if target.role == "attacker":
+            patch = target.before_attack_select(before_select_view)
+        if target.role == "defender":
+            patch = target.before_defence_select(before_select_view)
+        if patch:
+            self.context.apply_patch(patch)
         self.effect_hook.before_select(self.context)
         print(f"{state}可用重投次数{self.reload_times}")
+        before_select_view = self.context.create_view()
 
         while True:
             print(f"{state}骰子为{[dice for dice in target.dices]}")
@@ -78,6 +86,10 @@ class GameManager:
                 self.context.apply_patch(GamePatch(add_reload_times=-1))
                 for i in selected:
                     target.dices[i].load(target.load_max)
+                v = self.context.create_view()
+                patch = target.after_reload(v)
+                if patch:
+                    self.context.apply_patch(patch)
             elif act == 3 and target.special_dice:
                 target.use_spe_times -= 1
                 target.dices.append(target.special_dice)
@@ -216,10 +228,14 @@ class HookManager:
         view = context.create_view()
         patches = []
         for effect in view.attacker.effects:
+            if not effect.alive:
+                continue
             p = effect.before_sum(view)
             if p:
                 patches.append(p)
         for effect in view.defender.effects:
+            if not effect.alive:
+                continue
             p = effect.before_sum(view)
             if p:
                 patches.append(p)
@@ -233,10 +249,14 @@ class HookManager:
         view = context.create_view()
         patches = []
         for effect in view.attacker.effects:
+            if not effect.alive:
+                continue
             p = effect.after_settlement(view)
             if p:
                 patches.append(p)
         for effect in view.defender.effects:
+            if not effect.alive:
+                continue
             p = effect.after_settlement(view)
             if p:
                 patches.append(p)
@@ -246,10 +266,14 @@ class HookManager:
         view = context.create_view()
         patches = []
         for effect in view.attacker.effects:
+            if not effect.alive:
+                continue
             p = effect.before_select(view)
             if p:
                 patches.append(p)
         for effect in view.defender.effects:
+            if not effect.alive:
+                continue
             p = effect.before_select(view)
             if p:
                 patches.append(p)

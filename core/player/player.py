@@ -211,6 +211,9 @@ class Player:
     def after_defence_sum(self, view: GameView) -> GamePatch | None:
         pass
 
+    def before_attack_select(self, view: GameView) -> GamePatch | None:
+        pass
+
     def before_defence_select(self, view: GameView) -> GamePatch | None:
         pass
 
@@ -232,4 +235,7 @@ class Player:
     def on_layer_change(
         self, changes: list[tuple[Effect, int]]
     ) -> GamePatch | None:  # int 值为改变后的层数
+        pass
+
+    def after_reload(self, view: GameView) -> GamePatch | None:
         pass
