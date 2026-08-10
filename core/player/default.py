@@ -613,6 +613,27 @@ class HyacinePlayer(Player):
         )
 
 
+class SliverWolfPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            27, "银狼LV.999", 36, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        vl = [dice.now_value for dice in self.selected_dice]
+        p = GamePatch()
+        if 1 in vl:
+            p = p.merge(GamePatch(effects_to_add=[(self.role, Leap(self, True))]))
+        if 6 in vl:
+            p = p.merge(GamePatch(effects_to_add=[(self.role, Hack(self))]))
+        return p
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        return self.after_attack_sum(view)
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -641,6 +662,7 @@ players: list[Player] = [
     CyrenePlayer(),
     PhainonPlayer(),
     HyacinePlayer(),
+    SliverWolfPlayer(),
 ]
 
 
