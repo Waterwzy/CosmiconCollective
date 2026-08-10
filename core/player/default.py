@@ -634,6 +634,28 @@ class SliverWolfPlayer(Player):
         return self.after_attack_sum(view)
 
 
+class EvanesciaPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            28,
+            "绯英",
+            30,
+            helper.Select.NO_LIMIT,
+            3,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        eff = []
+        if len(self.selected_dice) <= 3:
+            eff.append((self.role, DoubleShot(self, True)))
+        if len(self.selected_dice) == 1:
+            eff.append((self.role, Pierce(self, True)))
+        return GamePatch(effects_to_add=eff)
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -663,6 +685,7 @@ players: list[Player] = [
     PhainonPlayer(),
     HyacinePlayer(),
     SliverWolfPlayer(),
+    EvanesciaPlayer(),
 ]
 
 

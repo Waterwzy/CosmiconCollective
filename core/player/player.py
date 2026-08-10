@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import random
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from ..context import GamePatch, GameView
 from .dice import Dice
 from .effects import Effect
+
+if TYPE_CHECKING:
+    from .helper import Select
 
 
 class Player:
@@ -16,8 +19,8 @@ class Player:
         pid: int,
         id: str,
         hp: int,
-        attack_dice: int,
-        defence_dice: int,
+        attack_dice: int | Select,
+        defence_dice: int | Select,
         dices: list[Dice],
         flash_times: int = 0,
         special_dice: Dice | None = None,
@@ -77,6 +80,8 @@ class Player:
         reload_times: int,
         view: GameView,
     ) -> bool:
+        from .helper import Select
+
         if action != 1 and action != 2 and action != 3:
             return False
         if not selected and (action == 1 or action == 2):
@@ -96,15 +101,16 @@ class Player:
         for i in selected:
             if i < 0 or i >= len(self.dices):
                 return False
-        return not (
-            action == 1
-            and (
-                role == "attack"
-                and len(selected) != self.attack_dice
-                or role == "defence"
-                and len(selected) != self.defence_dice
-            )
-        )
+        if action == 1:
+            if role == "attack":
+                if self.attack_dice == Select.NO_LIMIT:
+                    return True
+                return len(selected) == self.attack_dice
+            elif role == "defence":
+                if self.defence_dice == Select.NO_LIMIT:
+                    return True
+                return len(selected) == self.defence_dice
+        return True
 
     def select_dice(
         self, role: Literal["attack", "defence"], reload_times: int, view: GameView
@@ -115,13 +121,38 @@ class Player:
             act_list(list):操作骰子列表
         """
         if self.is_agent:
-            return (
-                1,
-                random.sample(
-                    range(len(self.dices)),
-                    self.attack_dice if role == "attack" else self.defence_dice,
-                ),
-            )
+            if self.role == "attacker":
+                if isinstance(self.attack_dice, int):
+                    return (
+                        1,
+                        random.sample(
+                            range(len(self.dices)),
+                            self.attack_dice,
+                        ),
+                    )
+                else:
+                    return (
+                        1,
+                        random.sample(
+                            range(len(self.dices)), random.randint(1, len(self.dices))
+                        ),
+                    )
+            elif self.role == "defender":
+                if isinstance(self.defence_dice, int):
+                    return (
+                        1,
+                        random.sample(
+                            range(len(self.dices)),
+                            self.defence_dice,
+                        ),
+                    )
+                else:
+                    return (
+                        1,
+                        random.sample(
+                            range(len(self.dices)), random.randint(1, len(self.dices))
+                        ),
+                    )
         select_list = []
         action = None
         while not self._legal_select(select_list, action, role, reload_times, view):

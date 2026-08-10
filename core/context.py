@@ -9,6 +9,7 @@ from .player.dice import Dice
 if TYPE_CHECKING:
     from ..main import GameManager
     from .player.effects import Effect
+    from .player.helper import Select
     from .player.player import Player
 
 
@@ -31,11 +32,11 @@ class PlayerView:
         return self._player.hp
 
     @property
-    def attack_dice(self) -> int:
+    def attack_dice(self) -> int | Select:
         return self._player.attack_dice
 
     @property
-    def defence_dice(self) -> int:
+    def defence_dice(self) -> int | Select:
         return self._player.defence_dice
 
     @property
