@@ -554,6 +554,27 @@ class CyrenePlayer(Player):
             )
 
 
+class PhainonPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            25, "白厄", 20, 4, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+        )
+        self.has_unyield = False
+
+    def on_game_start(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        return GamePatch(effects_to_add=[(self.role, Siphon(self))])
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        v = [dice.now_value for dice in self.selected_dice]
+        if len(set(v)) == 1 and not self.has_unyield:
+            self.has_unyield = True
+            return GamePatch(effects_to_add=[(self.role, Unyield(self, True))])
+
+
 players = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -580,6 +601,7 @@ players = [
     KleSparPlayer(),
     YaoGuangPlayer(),
     CyrenePlayer(),
+    PhainonPlayer(),
 ]
 
 
@@ -765,6 +787,16 @@ class Counterattack(Effect):
                     }
                 ]
             )
+
+
+class Siphon(Effect):
+    def __init__(self, master: Player):
+        super().__init__("虹吸", False, master)
+
+
+class Unyield(Effect):
+    def __init__(self, master: Player, clear: bool = False):
+        super().__init__("不屈", False, master, clear=clear)
 
 
 # =====曜彩骰定义部分=====

@@ -302,17 +302,32 @@ class GameContext:
     def _get_player(self, role: Literal["attacker", "defender"]) -> Player:
         return self._game.attacker if role == "attacker" else self._game.defender
 
+    def _get_player_siphon(self, target: Player):
+        from .player.default import Siphon
+
+        for eff in target.effects:
+            if isinstance(eff, Siphon):
+                return True
+        return False
+
     def apply_patch(self, patch: GamePatch) -> None:
         """将一个（已合并的）GamePatch 应用到 GameManager。"""
         if not patch:
             return
+        from .player.default import Unyield
 
         # 伤害
         for dam in patch.damage:
             target = self._get_player(dam["role"])
-            target.hp -= dam["count"]
-            if dam["count"] != 0:
+            fin_cost = dam["count"]
+            if Unyield in [type(eff) for eff in target.effects]:
+                fin_cost = min(fin_cost, target.hp - 1)
+            target.hp -= fin_cost
+            if fin_cost != 0:
                 target.attack_in_round = True
+            layers = self._get_player_siphon(self._get_player("attacker"))
+            if layers and dam["type"] == "common" and fin_cost > 0:
+                self.apply_patch(GamePatch(add_attacker_hp=int(fin_cost * 0.5)))
 
         # 回复血量
         self._game.attacker.hp = min(
