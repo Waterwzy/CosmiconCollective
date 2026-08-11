@@ -675,6 +675,45 @@ class MyPlayer(Player):
                 return GamePatch(add_reload_times=1)
 
 
+class AshveilPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            30, "不死途", 23, 3, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)]
+        )
+
+    def after_attack(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        if not self.role:
+            return
+        if hp_sum == 0:
+            return GamePatch(
+                effects_to_add=[
+                    (
+                        self.role,
+                        InstantDamage(
+                            self,
+                            int((view.attacker_sum + view.attacker_extra_sum) * 0.7),
+                        ),
+                    )
+                ]
+            )
+
+    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        if not self.role:
+            return
+        if hp_sum > 0:
+            return GamePatch(
+                effects_to_add=[
+                    (
+                        self.role,
+                        InstantDamage(
+                            self,
+                            int((view.defender_extra_sum + view.defender_sum) * 0.3),
+                        ),
+                    )
+                ]
+            )
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -706,6 +745,7 @@ players: list[Player] = [
     SliverWolfPlayer(),
     EvanesciaPlayer(),
     MyPlayer(),
+    AshveilPlayer(),
 ]
 
 

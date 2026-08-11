@@ -169,11 +169,12 @@ class Player:
         return action, select_list
 
     def begin_attack(self, view: GameView, hurts: int) -> GamePatch:
-        """角色遭受攻击后的行为，返回包含伤害与受击后效果的 GamePatch。
+        """生成该击的伤害 GamePatch。
 
-        力场（ForceFields）只免疫普通伤害（common），受击后效果仍然可以触发。
+        力场（ForceFields）只免疫普通伤害（common）。
         洞穿（Pierce）无视防御和力场效果。
         连击（DoubleShot）的多次攻击由 GameManager 统一结算，本方法只计算一次攻击。
+        受击后行为（after_being_attacked）由 GameManager 在伤害结算后单独触发。
         """
         from .default import ForceFields, Pierce
 
@@ -193,13 +194,9 @@ class Player:
             common_damage = 0
         else:
             common_damage = hurts
-        damage_patch = GamePatch(
+        return GamePatch(
             damage=[{"role": self.role, "type": "common", "count": common_damage}]
         )
-        after_patch = self.after_being_attacked(view, common_damage)
-        if after_patch is None:
-            after_patch = GamePatch()
-        return damage_patch.merge(after_patch)
 
     def clear_effects(self):
         self.effects = [
@@ -255,7 +252,16 @@ class Player:
         pass
 
     def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
-        pass
+        """防御方每击受到伤害后的行为，连击时每击触发一次。
+
+        hp_sum 为该击实际扣血（Unyield 等钳制后的真实值），未掉血时为 0。
+        """
+
+    def after_attack(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        """攻击方造成伤害后的行为，连击时每击触发一次。
+
+        hp_sum 为该击实际扣血（Unyield 等钳制后的真实值）。
+        """
 
     def on_game_start(self, view: GameView) -> GamePatch | None:
         pass

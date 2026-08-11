@@ -169,15 +169,21 @@ class GameManager:
         double_shots = [
             e for e in self.attacker.effects if isinstance(e, DoubleShot) and e.alive
         ]
-        hit_view = self.context.create_view()
-        hurt_patch = GamePatch.merge_all(
-            [
-                self.defender.begin_attack(hit_view, hurts)
-                for _ in range(1 + len(double_shots))
-            ]
-        ).merge(GamePatch(effects_to_consume=double_shots))
-        print(f"sum state patch\n{hurt_patch}")
-        self.context.apply_patch(hurt_patch)
+        for _ in range(1 + len(double_shots)):
+            hit_view = self.context.create_view()
+            hit_patch = self.defender.begin_attack(hit_view, hurts)
+            print(f"sum state patch\n{hit_patch}")
+            hp_before = self.defender.hp
+            self.context.apply_patch(hit_patch)
+            hp_sum = max(0, hp_before - self.defender.hp)
+            after_view = self.context.create_view()
+            dp = self.defender.after_being_attacked(after_view, hp_sum)
+            if dp:
+                self.context.apply_patch(dp)
+            aap = self.attacker.after_attack(after_view, hp_sum)
+            if aap:
+                self.context.apply_patch(aap)
+        self.context.apply_patch(GamePatch(effects_to_consume=double_shots))
 
         self.effect_hook.after_settlement(self.context)
 
