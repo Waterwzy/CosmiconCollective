@@ -268,5 +268,5 @@ class Player:
     ) -> GamePatch | None:  # int 值为改变后的层数
         pass
 
-    def after_reload(self, view: GameView) -> GamePatch | None:
+    def after_reload(self, view: GameView, selected: list[int]) -> GamePatch | None:
         pass

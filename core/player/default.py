@@ -499,7 +499,7 @@ class YaoGuangPlayer(Player):
     def round_start(self, view: GameView) -> GamePatch | None:
         self.reload_this_round = 0
 
-    def after_reload(self, view: GameView) -> GamePatch | None:
+    def after_reload(self, view: GameView, selected: list[int]) -> GamePatch | None:
         if self.role != "attacker":
             return
         self.reload_this_round += 1
@@ -656,6 +656,25 @@ class EvanesciaPlayer(Player):
         return GamePatch(effects_to_add=eff)
 
 
+class MyPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            29, "开拓者", 36, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        add = 0
+        for num in self.selected_dice:
+            if num.now_value == 6:
+                add += 2
+        return GamePatch(add_extra_attack=add)
+
+    def after_reload(self, view: GameView, selected: list[int]) -> GamePatch | None:
+        for i in selected:
+            if self.dices[i].now_value == 6 and not self.dices[i].special:
+                return GamePatch(add_reload_times=1)
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -686,6 +705,7 @@ players: list[Player] = [
     HyacinePlayer(),
     SliverWolfPlayer(),
     EvanesciaPlayer(),
+    MyPlayer(),
 ]
 
 

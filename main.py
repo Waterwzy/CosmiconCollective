@@ -89,7 +89,7 @@ class GameManager:
                 for i in selected:
                     target.dices[i].load(target.load_max)
                 v = self.context.create_view()
-                patch = target.after_reload(v)
+                patch = target.after_reload(v, selected)
                 if patch:
                     self.context.apply_patch(patch)
             elif act == 3 and target.special_dice:
