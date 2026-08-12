@@ -129,7 +129,7 @@ class GameView:
 
 class DamageDict(TypedDict):
     role: Literal["attacker", "defender"]
-    type: Literal["common", "poisoning", "instant", "thorn", "counterattack"]
+    type: Literal["common", "poisoning", "instant", "thorn", "counterattack", "blade"]
     count: int
 
 

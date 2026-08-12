@@ -750,6 +750,24 @@ class SundayPlayer(Player):
         )
 
 
+class BladePlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            32, "刃", 49, 4, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+        )
+
+    def before_attack_select(self, view: GameView) -> GamePatch | None:
+        return GamePatch(add_reload_times=6 - view.reload_times)
+
+    def before_defence_select(self, view: GameView) -> GamePatch | None:
+        return self.before_attack_select(view)
+
+    def after_reload(self, view: GameView, selected: list[int]) -> GamePatch | None:
+        if not self.role:
+            return
+        return GamePatch(damage=[{"count": 2, "role": self.role, "type": "blade"}])
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -783,6 +801,7 @@ players: list[Player] = [
     MyPlayer(),
     AshveilPlayer(),
     SundayPlayer(),
+    BladePlayer(),
 ]
 
 
