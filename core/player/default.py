@@ -806,6 +806,18 @@ class RuanMeiPlayer(Player):
         return self.after_attack_sum(view)
 
 
+class HimekoPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            35, "姬子", 33, 3, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        v_list = [dice.now_value for dice in self.selected_dice]
+        if helper.max_continue_dices(self) == len(v_list) or len(set(v_list)) == 1:
+            return GamePatch(add_extra_attack=12)
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -842,6 +854,7 @@ players: list[Player] = [
     BladePlayer(),
     HysilensPlayer(),
     RuanMeiPlayer(),
+    HimekoPlayer(),
 ]
 
 
