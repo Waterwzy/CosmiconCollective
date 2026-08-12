@@ -768,6 +768,27 @@ class BladePlayer(Player):
         return GamePatch(damage=[{"count": 2, "role": self.role, "type": "blade"}])
 
 
+class HysilensPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            33, "海瑟音", 28, 3, 3, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(6)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return
+        v_list = [dice.now_value for dice in self.selected_dice]
+        s = 0
+        for num in v_list:
+            if num % 2 == 0:
+                s += 1
+        p = GamePatch()
+        p = p.merge(GamePatch(effects_to_add=[(self.role, Poisoning(self, s))]))
+        if s == len(self.selected_dice):
+            p = p.merge(GamePatch(trigger_effects=[(self.role, Poisoning)]))
+        return p
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -802,6 +823,7 @@ players: list[Player] = [
     AshveilPlayer(),
     SundayPlayer(),
     BladePlayer(),
+    HysilensPlayer(),
 ]
 
 
@@ -854,6 +876,19 @@ class Poisoning(Effect):
         return GamePatch(
             damage=[{"role": target_role, "type": "poisoning", "count": self.layer}],
             effects_to_add=[(self.master.role, Poisoning(self.master, -1))],
+        )
+
+    def trigger(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
+        target_role: Literal["attacker", "defender"] = (
+            "defender" if self.master.role == "attacker" else "attacker"
+        )
+        print(
+            f"{'攻击方' if self.master.role == 'attacker' else '防御方'}中毒效果{self.layer}层生效"
+        )
+        return GamePatch(
+            damage=[{"role": target_role, "type": "poisoning", "count": self.layer}]
         )
 
 

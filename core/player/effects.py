@@ -42,3 +42,6 @@ class Effect:
 
     def before_select(self, view: GameView) -> GamePatch | None:
         """在选择骰子前触发的效果"""
+
+    def trigger(self, view: GameView) -> GamePatch | None:
+        """需要特殊触发的效果"""

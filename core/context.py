@@ -148,6 +148,8 @@ class GamePatch:
         add_defence_dice: dict[Literal["attacker", "defender"], int] | None = None,
         effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]]
         | None = None,
+        trigger_effects: list[tuple[Literal["attacker", "defender"], type[Effect]]]
+        | None = None,
         dice_value_changes: list[tuple[Literal["attacker", "defender"], int, int]]
         | None = None,
         upgrade_dice_requests: list[Dice] | None = None,
@@ -168,6 +170,9 @@ class GamePatch:
         self.effects_to_add: list[tuple[Literal["attacker", "defender"], Effect]] = (
             effects_to_add if effects_to_add is not None else []
         )
+        self.trigger_effects: list[
+            tuple[Literal["attacker", "defender"], type[Effect]]
+        ] = trigger_effects if trigger_effects is not None else []
         self.dice_value_changes: list[
             tuple[Literal["attacker", "defender"], int, int]
         ] = dice_value_changes if dice_value_changes is not None else []
@@ -202,6 +207,7 @@ class GamePatch:
                 self.add_attack_dice,
                 self.add_defence_dice,
                 self.effects_to_add,
+                self.trigger_effects,
                 self.dice_value_changes,
                 self.upgrade_dice_requests,
                 self.player_state_changes,
@@ -264,6 +270,7 @@ class GamePatch:
                 Counter(self.add_defence_dice) + Counter(other.add_defence_dice)
             ),
             effects_to_add=list(self.effects_to_add) + list(other.effects_to_add),
+            trigger_effects=list(self.trigger_effects) + list(other.trigger_effects),
             dice_value_changes=list(self.dice_value_changes)
             + list(other.dice_value_changes),
             upgrade_dice_requests=list(
@@ -395,6 +402,19 @@ class GameContext:
                     def_patches.append(p)
             if def_patches:
                 self.apply_patch(GamePatch.merge_all(def_patches))
+
+        # 触发特殊效果
+        view = self.create_view()
+        pa = GamePatch()
+        for role, effect in patch.trigger_effects:
+            target = self._get_player(role)
+            for eff in target.effects:
+                if isinstance(eff, effect):
+                    p = eff.trigger(view)
+                    if p:
+                        pa = pa.merge(p)
+        if pa:
+            self.apply_patch(pa)
 
         # 修改骰子点数
         for role, index, value in patch.dice_value_changes:
