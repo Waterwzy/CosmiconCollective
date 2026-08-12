@@ -714,6 +714,42 @@ class AshveilPlayer(Player):
             )
 
 
+class SundayPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            31, "星期日", 27, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)]
+        )
+
+    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
+        if hp_sum > 0:
+            return GamePatch(
+                effects_to_add=[
+                    ("attacker", Thorn(self, 5)),
+                    ("defender", Thorn(self, 5)),
+                ]
+            )
+
+    def _get_thron_layers(self):
+        for eff in self.effects:
+            if isinstance(eff, Thorn) and eff.alive:
+                return eff.layer
+        return 0
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if self.role != "attacker":
+            return
+        v_list = [dice.now_value for dice in self.selected_dice]
+        if len(v_list) != len(set(v_list)):
+            return
+        layers = self._get_thron_layers()
+        return GamePatch(
+            effects_to_add=[
+                ("attacker", Thorn(self, -layers)),
+                ("defender", Thorn(self, layers)),
+            ]
+        )
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -746,6 +782,7 @@ players: list[Player] = [
     EvanesciaPlayer(),
     MyPlayer(),
     AshveilPlayer(),
+    SundayPlayer(),
 ]
 
 
