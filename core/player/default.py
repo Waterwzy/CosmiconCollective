@@ -789,6 +789,23 @@ class HysilensPlayer(Player):
         return p
 
 
+class RuanMeiPlayer(Player):
+    def __init__(self) -> None:
+        super().__init__(
+            34, "阮·梅", 50, 2, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(8)]
+        )
+
+    def after_attack_sum(self, view: GameView) -> GamePatch | None:
+        if not self.role:
+            return
+        if helper.max_continue_dices(self) == len(self.selected_dice):
+            return GamePatch(effects_to_add=[(self.role, Evolution(self, 1))])
+        return GamePatch(effects_to_add=[(self.role, Evolution(self, -1))])
+
+    def after_defence_sum(self, view: GameView) -> GamePatch | None:
+        return self.after_attack_sum(view)
+
+
 players: list[Player] = [
     DefaultPlayer(),
     DefaultAIPlayer(),
@@ -824,6 +841,7 @@ players: list[Player] = [
     SundayPlayer(),
     BladePlayer(),
     HysilensPlayer(),
+    RuanMeiPlayer(),
 ]
 
 
@@ -1032,6 +1050,17 @@ class Siphon(Effect):
 class Unyield(Effect):
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("不屈", False, master, clear=clear)
+
+
+class Evolution(Effect):
+    def __init__(self, master: Player, layer: int = 0):
+        super().__init__("进化", True, master, layer=layer)
+
+    def before_select(self, view: GameView) -> GamePatch | None:
+        if self.master.role == "attacker" and view.state == "attack":
+            return GamePatch(add_attack_dice={"attacker": self.layer})
+        if self.master.role == "defender" and view.state == "defence":
+            return GamePatch(add_defence_dice={"defender": self.layer})
 
 
 # =====曜彩骰定义部分=====
