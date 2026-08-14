@@ -61,6 +61,13 @@ def test_merge_concatenates_dice_value_changes():
     assert merged.dice_value_changes == [("defender", 0, 2), ("defender", 1, 6)]
 
 
+def test_merge_accumulates_dice_ops():
+    p1 = GamePatch(dice_ops=[("defender", "raise_lowest", 1)])
+    p2 = GamePatch(dice_ops=[("defender", "raise_lowest", 2)])
+    merged = p1.merge(p2)
+    assert merged.dice_ops == [("defender", "raise_lowest", 3)]
+
+
 def test_apply_damage_reduces_hp_and_clamps_at_zero(game):
     before = game.defender.hp
     game.context.apply_patch(
@@ -131,6 +138,20 @@ def test_leap_effect_sets_lowest_dice_to_max(game):
     assert patch is not None
     game.context.apply_patch(patch)
     assert [dice.now_value for dice in game.attacker.selected_dice] == [6, 6, 4]
+
+
+def test_stacked_raise_lowest_ops_raise_distinct_dice(game):
+    """多个跃升叠加时，每次操作都要重新计算当前最低的骰子。"""
+    game.attacker.selected_dice = _dice_with_values([1, 2, 5])
+    game.context.apply_patch(GamePatch(dice_ops=[("attacker", "raise_lowest", 2)]))
+    assert [dice.now_value for dice in game.attacker.selected_dice] == [6, 6, 5]
+
+
+def test_stacked_lower_highest_ops_lower_distinct_dice(game):
+    """多个骇入叠加时，最大的多颗骰子分别被改为 2。"""
+    game.defender.selected_dice = _dice_with_values([6, 5, 3])
+    game.context.apply_patch(GamePatch(dice_ops=[("defender", "lower_highest", 2)]))
+    assert [dice.now_value for dice in game.defender.selected_dice] == [2, 2, 3]
 
 
 def test_reload_times_clamp_at_zero(game):

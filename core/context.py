@@ -146,6 +146,13 @@ class DamageDict(TypedDict):
     pierce: NotRequired[bool]
 
 
+DiceOp = Literal["lower_highest", "raise_lowest"]
+"""骰子操作意图（引擎级原语，效果只声明 op 与次数）：
+lower_highest：将目标已选骰中点数大于 2 的最大的 count 个非曜彩骰改为 2（原“骇入”）
+raise_lowest：重复 count 次，将目标当前点数最低的非曜彩骰改为其最大面数（原“跃升”）
+"""
+
+
 class GamePatch:
     """描述一次对游戏状态的修改意图。"""
 
@@ -164,6 +171,8 @@ class GamePatch:
         trigger_effects: list[tuple[Literal["attacker", "defender"], type[Effect]]]
         | None = None,
         dice_value_changes: list[tuple[Literal["attacker", "defender"], int, int]]
+        | None = None,
+        dice_ops: list[tuple[Literal["attacker", "defender"], DiceOp, int]]
         | None = None,
         upgrade_dice_requests: list[Dice] | None = None,
         player_state_changes: list[tuple[Literal["attacker", "defender"], str, Any]]
@@ -189,6 +198,9 @@ class GamePatch:
         self.dice_value_changes: list[
             tuple[Literal["attacker", "defender"], int, int]
         ] = dice_value_changes if dice_value_changes is not None else []
+        self.dice_ops: list[tuple[Literal["attacker", "defender"], DiceOp, int]] = (
+            dice_ops if dice_ops is not None else []
+        )
         self.upgrade_dice_requests: list[Dice] = (
             upgrade_dice_requests if upgrade_dice_requests is not None else []
         )
@@ -204,7 +216,7 @@ class GamePatch:
         """防御方总点数的乘数（如“翻倍”）"""
 
     def __str__(self) -> str:
-        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nEffects to consume:{self.effects_to_consume}"
+        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nDice ops:{self.dice_ops}\nPlayer changes:{self.player_state_changes}\nEffects to consume:{self.effects_to_consume}"
 
     def __bool__(self):
         return any(
@@ -220,6 +232,7 @@ class GamePatch:
                 self.effects_to_add,
                 self.trigger_effects,
                 self.dice_value_changes,
+                self.dice_ops,
                 self.upgrade_dice_requests,
                 self.player_state_changes,
                 self.effects_to_consume,
@@ -248,6 +261,11 @@ class GamePatch:
                     {"role": dam["role"], "type": dam["type"], "count": dam["count"]}
                 )
 
+        # 合并骰子操作意图（按 (role, op) 累加次数）
+        merged_ops: dict[tuple[Literal["attacker", "defender"], DiceOp], int] = {}
+        for role, op, count in self.dice_ops + other.dice_ops:
+            merged_ops[(role, op)] = merged_ops.get((role, op), 0) + count
+
         return GamePatch(
             damage=merged_damage,
             add_reload_times=self.add_reload_times + other.add_reload_times,
@@ -265,6 +283,7 @@ class GamePatch:
             trigger_effects=list(self.trigger_effects) + list(other.trigger_effects),
             dice_value_changes=list(self.dice_value_changes)
             + list(other.dice_value_changes),
+            dice_ops=[(role, op, count) for (role, op), count in merged_ops.items()],
             upgrade_dice_requests=list(
                 set(self.upgrade_dice_requests + other.upgrade_dice_requests)
             ),
@@ -428,6 +447,37 @@ class GameContext:
         for role, attr, value in patch.player_state_changes:
             target = self._get_player(role)
             setattr(target, attr, value)
+
+        # 骰子操作意图：按 (role, op) 累加次数后顺序执行，
+        # lower_highest 先于 raise_lowest（与原引擎的“骇入→跃升”顺序一致）
+        for op in ("lower_highest", "raise_lowest"):
+            for role, op_name, count in patch.dice_ops:
+                if op_name != op:
+                    continue
+                target = self._get_player(role)
+                if op == "lower_highest":
+                    candidates = [
+                        (index, dice.now_value)
+                        for index, dice in enumerate(target.selected_dice)
+                        if not dice.special and dice.now_value > 2
+                    ]
+                    candidates.sort(key=lambda item: item[1], reverse=True)
+                    for index, _ in candidates[:count]:
+                        target.selected_dice[index].now_value = 2
+                else:  # raise_lowest：每次操作后重新计算当前最低的骰子
+                    for _ in range(count):
+                        candidates = [
+                            (index, dice.now_value)
+                            for index, dice in enumerate(target.selected_dice)
+                            if not dice.special
+                        ]
+                        if not candidates:
+                            break
+                        candidates.sort(key=lambda item: item[1])
+                        index, _ = candidates[0]
+                        target.selected_dice[index].now_value = target.selected_dice[
+                            index
+                        ].sides
 
         # 消耗效果（如连击触发后置死）
         for effect in patch.effects_to_consume:

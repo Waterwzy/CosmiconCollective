@@ -871,17 +871,8 @@ class Hack(Effect):
         target_role: Literal["attacker", "defender"] = (
             "defender" if self.master.role == "attacker" else "attacker"
         )
-        target = view.get_player_view(target_role)
-        candidates = [
-            (index, dice.now_value)
-            for index, dice in enumerate(target.selected_dice)
-            if not dice.special and dice.now_value > 2
-        ]
-        candidates.sort(key=lambda item: item[1], reverse=True)
         self.alive = False
-        return GamePatch(
-            dice_value_changes=[(target_role, index, 2) for index, _ in candidates[:1]]
-        )
+        return GamePatch(dice_ops=[(target_role, "lower_highest", 1)])
 
 
 class InstantDamage(Effect):
@@ -1041,20 +1032,7 @@ class Leap(Effect):
     def before_sum(self, view: GameView) -> GamePatch | None:
         if not self.master.role:
             return GamePatch()
-        target = view.get_player_view(self.master.role)
-        candidates = [
-            (index, dice.now_value)
-            for index, dice in enumerate(target.selected_dice)
-            if not dice.special
-        ]
-        if not candidates:
-            return GamePatch()
-        index, _ = min(candidates, key=lambda item: item[1])
-        return GamePatch(
-            dice_value_changes=[
-                (self.master.role, index, target.selected_dice[index].sides)
-            ]
-        )
+        return GamePatch(dice_ops=[(self.master.role, "raise_lowest", 1)])
 
 
 class Thorn(Effect):
