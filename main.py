@@ -2,17 +2,23 @@ import random
 from typing import Literal
 
 from core.context import GameContext, GamePatch
-from core.player.default import DefaultAIPlayer, DoubleShot, players, special_dices
+from core.player.default import DefaultAIPlayer, players, special_dices
 from core.player.player import Player
 
 
 class GameManager:
-    def __init__(self, red_player: Player, blue_player: Player) -> None:
+    def __init__(
+        self, red_player: Player, blue_player: Player, seed: int | None = None
+    ) -> None:
         self.players = [red_player, blue_player]
-        self.attacker_index = random.randint(0, 1)
+        self.rng = random.Random(seed)
+        """对局随机源，可注入种子以复现对局"""
+        self.attacker_index = self.rng.randint(0, 1)
         self.round = 1
         self.attacker_extra_sum = 0
         self.defender_extra_sum = 0
+        self.attacker_multiplier = 1
+        self.defender_multiplier = 1
         self.effect_hook = HookManager()
         self.reload_times = 0
         self.state: Literal["begin", "attack", "defence", "sum"] | None = None
@@ -41,12 +47,14 @@ class GameManager:
         self.round += 1
         self.attacker_extra_sum = 0
         self.defender_extra_sum = 0
+        self.attacker_multiplier = 1
+        self.defender_multiplier = 1
         self.attacker.role = "attacker"
         self.defender.role = "defender"
         self.attacker.clear_effects()
         self.defender.clear_effects()
         self.attacker.attack_in_round = False
-        self.attacker.attack_in_round = False
+        self.defender.attack_in_round = False
 
     def _is_win(self) -> bool:
         return self.attacker.hp <= 0 or self.defender.hp <= 0
@@ -55,7 +63,7 @@ class GameManager:
         target.dices = [dice for dice in target.dices if not dice.special]
 
         for dice in target.dices:
-            dice.load(target.load_max)
+            dice.load(target.load_max, self.rng)
 
         self.reload_times = 2 if state == "attack" else 0
         act = None
@@ -80,14 +88,14 @@ class GameManager:
         while True:
             print(f"{state}骰子为{[dice for dice in target.dices]}")
             act, selected = target.select_dice(
-                state, self.reload_times, before_select_view
+                state, self.reload_times, before_select_view, self.rng
             )
             if act == 1:
                 break
             elif act == 2:
                 self.context.apply_patch(GamePatch(add_reload_times=-1))
                 for i in selected:
-                    target.dices[i].load(target.load_max)
+                    target.dices[i].load(target.load_max, self.rng)
                 v = self.context.create_view()
                 patch = target.after_reload(v, selected)
                 if patch:
@@ -95,7 +103,7 @@ class GameManager:
             elif act == 3 and target.special_dice:
                 target.use_spe_times -= 1
                 target.dices.append(target.special_dice)
-                target.dices[-1].load(target.load_max)
+                target.dices[-1].load(target.load_max, self.rng)
 
         print(f"{state}选择的骰子为：{[str(target.dices[i]) for i in selected]}")
         target.selected_dice = [target.dices[i] for i in selected]
@@ -107,6 +115,7 @@ class GameManager:
                 self.context.apply_patch(dice.trigger_dice())
 
     def start_round(self):
+        """执行一整轮。任意一方血量归零时本回合立即终止，不再进入下一轮。"""
         self.state = "begin"
 
         if self.attacker_index == 0:
@@ -124,26 +133,38 @@ class GameManager:
         if dp:
             round_patches.append(dp)
         self.context.apply_patch(GamePatch.merge_all(round_patches))
+        if self._is_win():
+            return
 
         self.state = "attack"
 
         self.select_dice(self.attacker, self.state)
+        if self._is_win():
+            return
 
         ap = self.attacker.after_attack_sum(self.context.create_view())
         if ap:
             self.context.apply_patch(ap)
+        if self._is_win():
+            return
 
         self.state = "defence"
 
         self.select_dice(self.defender, self.state)
+        if self._is_win():
+            return
 
-        dsp = self.defender.after_defence_sum(self.context.create_view())
-        if dsp:
-            self.context.apply_patch(dsp)
+        dp = self.defender.after_defence_sum(self.context.create_view())
+        if dp:
+            self.context.apply_patch(dp)
+        if self._is_win():
+            return
 
         self.state = "sum"
 
         self.effect_hook.before_sum(self.context)
+        if self._is_win():
+            return
 
         settle_patches = []
         settle_view = self.context.create_view()
@@ -154,48 +175,72 @@ class GameManager:
         if dsp:
             settle_patches.append(dsp)
         self.context.apply_patch(GamePatch.merge_all(settle_patches))
+        if self._is_win():
+            return
 
-        print(f"攻击方总点数为：{self.attacker_sum + self.attacker_extra_sum}")
-        print(f"防御方总点数为：{self.defender_sum + self.defender_extra_sum}")
+        attacker_total = (
+            self.attacker_sum + self.attacker_extra_sum
+        ) * self.attacker_multiplier
+        defender_total = (
+            self.defender_sum + self.defender_extra_sum
+        ) * self.defender_multiplier
+        print(f"攻击方总点数为：{attacker_total}")
+        print(f"防御方总点数为：{defender_total}")
 
-        hurts = max(
-            0,
-            self.attacker_sum
-            + self.attacker_extra_sum
-            - self.defender_sum
-            - self.defender_extra_sum,
-        )
+        hurts = max(0, attacker_total - defender_total)
         print(f"受到伤害：{hurts}")
-        double_shots = [
-            e for e in self.attacker.effects if isinstance(e, DoubleShot) and e.alive
+
+        # 追加攻击次数由攻击方存活效果声明（如连击），结算完毕后效果可自我消耗
+        extra_hit_view = self.context.create_view()
+        hit_effects = [
+            effect
+            for effect in self.attacker.effects
+            if effect.alive and effect.extra_hits(extra_hit_view) > 0
         ]
-        for _ in range(1 + len(double_shots)):
+        extra_hits = sum(effect.extra_hits(extra_hit_view) for effect in hit_effects)
+        for _ in range(1 + extra_hits):
             hit_view = self.context.create_view()
             hit_patch = self.defender.begin_attack(hit_view, hurts)
             print(f"sum state patch\n{hit_patch}")
             hp_before = self.defender.hp
             self.context.apply_patch(hit_patch)
+            if self._is_win():
+                return
             hp_sum = max(0, hp_before - self.defender.hp)
             after_view = self.context.create_view()
             dp = self.defender.after_being_attacked(after_view, hp_sum)
             if dp:
                 self.context.apply_patch(dp)
-            aap = self.attacker.after_attack(after_view, hp_sum)
-            if aap:
-                self.context.apply_patch(aap)
-        self.context.apply_patch(GamePatch(effects_to_consume=double_shots))
+            if self._is_win():
+                return
+            ap = self.attacker.after_attack(after_view, hp_sum)
+            if ap:
+                self.context.apply_patch(ap)
+            if self._is_win():
+                return
+
+        after_extra_hits_view = self.context.create_view()
+        for effect in hit_effects:
+            if effect.alive:
+                consume_patch = effect.after_extra_hits(after_extra_hits_view)
+                if consume_patch:
+                    self.context.apply_patch(consume_patch)
 
         self.effect_hook.after_settlement(self.context)
+        if self._is_win():
+            return
 
         after_settle_view = self.context.create_view()
         aap = self.attacker.after_settlement(after_settle_view)
         dap = self.defender.after_settlement(after_settle_view)
-        after_settle_patch = []
+        after_settle_patches = []
         if aap:
-            after_settle_patch.append(aap)
+            after_settle_patches.append(aap)
         if dap:
-            after_settle_patch.append(dap)
-        self.context.apply_patch(GamePatch.merge_all(after_settle_patch))
+            after_settle_patches.append(dap)
+        self.context.apply_patch(GamePatch.merge_all(after_settle_patches))
+        if self._is_win():
+            return
 
         print(f"防御方剩余血量为：{self.defender.hp}")
 
@@ -221,6 +266,14 @@ class GameManager:
         self.context.apply_patch(GamePatch.merge_all(start_patches))
         while not self._is_win():
             self.start_round()
+
+        print("游戏结束！")
+        if self.attacker.hp <= 0 and self.defender.hp <= 0:
+            print("双方同归于尽！")
+        elif self.attacker.hp <= 0:
+            print(f"{self.defender.id}获胜！")
+        else:
+            print(f"{self.attacker.id}获胜！")
 
 
 class HookManager:
@@ -289,18 +342,51 @@ class HookManager:
 
 
 if __name__ == "__main__":
-    selected_player = -1
-    while (
-        selected_player < 0 or selected_player >= len(players)
-    ) and selected_player != 1:
-        selected_player = int(input(f"请选择你的角色（输入数字）：\n{players}\n"))
-    selected_spe_dice = -1
-    while selected_spe_dice < 0 or selected_spe_dice >= len(special_dices):
-        selected_spe_dice = int(
-            input(f"请选择你的曜彩骰（输入index）:\n{special_dices}\n")
-        )
+    import sys
+
+    def input_int(prompt: str) -> int:
+        while True:
+            try:
+                return int(input(prompt))
+            except ValueError:
+                print("输入无效，请输入数字。")
+
+    seed = None
+    if len(sys.argv) > 1:
+        try:
+            seed = int(sys.argv[1])
+        except ValueError:
+            print(f"无效的随机种子 {sys.argv[1]}，本次使用随机种子。")
+
+    print("可用角色：")
+    for index, player in enumerate(players):
+        tag = "（AI角色）" if player.is_agent else ""
+        print(f"{index}. {player}{tag}")
+
+    selected_player = input_int("请选择你的角色（输入数字）：")
+    while True:
+        if (
+            0 <= selected_player < len(players)
+            and not players[selected_player].is_agent
+        ):
+            break
+        if 0 <= selected_player < len(players):
+            print("该角色是 AI 角色，无法选择，请选择其他角色。")
+        else:
+            print(f"输入无效，请输入 0 到 {len(players) - 1} 之间的数字。")
+        selected_player = input_int("请选择你的角色（输入数字）：")
+
+    print("可用曜彩骰：")
+    for index, dice in enumerate(special_dices):
+        print(f"{index}. {dice.name}")
+
+    selected_spe_dice = input_int("请选择你的曜彩骰（输入index）：")
+    while not 0 <= selected_spe_dice < len(special_dices):
+        print(f"输入无效，请输入 0 到 {len(special_dices) - 1} 之间的数字。")
+        selected_spe_dice = input_int("请选择你的曜彩骰（输入index）：")
+
     players[selected_player].special_dice = special_dices[selected_spe_dice]
-    game = GameManager(players[selected_player], DefaultAIPlayer())
+    game = GameManager(players[selected_player], DefaultAIPlayer(), seed=seed)
     del players
     del special_dices
     game.main()

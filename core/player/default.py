@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ..context import GamePatch, GameView
+from ..context import DamageDict, GamePatch, GameView
 from . import helper
 from .dice import Dice
 from .effects import Effect
@@ -871,8 +871,17 @@ class Hack(Effect):
         target_role: Literal["attacker", "defender"] = (
             "defender" if self.master.role == "attacker" else "attacker"
         )
+        target = view.get_player_view(target_role)
+        candidates = [
+            (index, dice.now_value)
+            for index, dice in enumerate(target.selected_dice)
+            if not dice.special and dice.now_value > 2
+        ]
+        candidates.sort(key=lambda item: item[1], reverse=True)
         self.alive = False
-        return GamePatch(intend_hack=[(target_role, 1)])
+        return GamePatch(
+            dice_value_changes=[(target_role, index, 2) for index, _ in candidates[:1]]
+        )
 
 
 class InstantDamage(Effect):
@@ -926,6 +935,14 @@ class Poisoning(Effect):
 class ForceFields(Effect):
     def __init__(self, master: Player, clear: bool):
         super().__init__("力场", False, master, clear=clear)
+
+    def filter_damage(self, damage: DamageDict, view: GameView) -> DamageDict:
+        """免疫普通伤害，但无法免疫洞穿。"""
+        if damage.get("pierce"):
+            return damage
+        if damage["role"] != self.master.role or damage["type"] != "common":
+            return damage
+        return {"role": damage["role"], "type": damage["type"], "count": 0}
 
 
 class Strength(Effect):
@@ -991,10 +1008,30 @@ class Pierce(Effect):
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("洞穿", False, master=master, clear=clear)
 
+    def filter_damage(self, damage: DamageDict, view: GameView) -> DamageDict:
+        """无视防御点数和力场效果。"""
+        if self.master.role != "attacker":
+            return damage
+        if damage["role"] == self.master.role or damage["type"] != "common":
+            return damage
+        return {
+            "role": damage["role"],
+            "type": damage["type"],
+            "count": (view.attacker_sum + view.attacker_extra_sum)
+            * view.attacker_multiplier,
+            "pierce": True,
+        }
+
 
 class DoubleShot(Effect):
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("连击", False, master, clear=clear)
+
+    def extra_hits(self, view: GameView) -> int:
+        return 1
+
+    def after_extra_hits(self, view: GameView) -> GamePatch | None:
+        return GamePatch(effects_to_consume=[self])
 
 
 class Leap(Effect):
@@ -1004,7 +1041,20 @@ class Leap(Effect):
     def before_sum(self, view: GameView) -> GamePatch | None:
         if not self.master.role:
             return GamePatch()
-        return GamePatch(intend_leap=[(self.master.role, 1)])
+        target = view.get_player_view(self.master.role)
+        candidates = [
+            (index, dice.now_value)
+            for index, dice in enumerate(target.selected_dice)
+            if not dice.special
+        ]
+        if not candidates:
+            return GamePatch()
+        index, _ = min(candidates, key=lambda item: item[1])
+        return GamePatch(
+            dice_value_changes=[
+                (self.master.role, index, target.selected_dice[index].sides)
+            ]
+        )
 
 
 class Thorn(Effect):
@@ -1038,11 +1088,10 @@ class Counterattack(Effect):
         if self.master.role != "defender":
             return
         ex_defence_num = (
-            view.defender_sum
-            + view.defender_extra_sum
-            - view.attacker_sum
-            - view.attacker_extra_sum
-        )
+            view.defender_sum + view.defender_extra_sum
+        ) * view.defender_multiplier - (
+            view.attacker_sum + view.attacker_extra_sum
+        ) * view.attacker_multiplier
         if ex_defence_num > 0:
             return GamePatch(
                 damage=[
@@ -1059,10 +1108,29 @@ class Siphon(Effect):
     def __init__(self, master: Player):
         super().__init__("虹吸", False, master)
 
+    def after_damage(self, damage: DamageDict, view: GameView) -> GamePatch | None:
+        if self.master.role != "attacker":
+            return None
+        if damage["role"] == self.master.role:
+            return None
+        if damage["type"] != "common" or damage["count"] <= 0:
+            return None
+        return GamePatch(add_attacker_hp=int(damage["count"] * 0.5))
+
 
 class Unyield(Effect):
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("不屈", False, master, clear=clear)
+
+    def filter_damage(self, damage: DamageDict, view: GameView) -> DamageDict:
+        """受到伤害时至少保留 1 点血量。"""
+        if damage["role"] != self.master.role:
+            return damage
+        return {
+            "role": damage["role"],
+            "type": damage["type"],
+            "count": min(damage["count"], self.master.hp - 1),
+        }
 
 
 class Evolution(Effect):
@@ -1074,6 +1142,51 @@ class Evolution(Effect):
             return GamePatch(add_attack_dice={"attacker": self.layer})
         if self.master.role == "defender" and view.state == "defence":
             return GamePatch(add_defence_dice={"defender": self.layer})
+
+
+class Double(Effect):
+    """翻倍：本回合己方总点数（已选骰子 + 额外加成）翻倍，可叠加。"""
+
+    def __init__(self, master: Player) -> None:
+        super().__init__("翻倍", True, master, layer=1, clear=True)
+
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
+        factor = 2**self.layer
+        if self.master.role == "attacker":
+            return GamePatch(multiply_attack=factor)
+        return GamePatch(multiply_defence=factor)
+
+
+class Overload(Effect):
+    """超载：攻击时附加与层数相同的攻击值，防御时对自己造成层数一半（向下取整）的伤害。"""
+
+    def __init__(self, master: Player, layer: int) -> None:
+        super().__init__("超载", True, master, layer=layer)
+
+    def before_sum(self, view: GameView) -> GamePatch | None:
+        if not self.alive or self.master.role is None:
+            return None
+        if self.master.role == "attacker":
+            return GamePatch(add_extra_attack=self.layer)
+        return GamePatch(
+            damage=[
+                {
+                    "role": self.master.role,
+                    "type": "overload",
+                    "count": self.layer // 2,
+                }
+            ]
+        )
+
+
+class LastStand(Effect):
+    """背水标记：实际结算在骰子的 trigger_dice 中完成。"""
+
+
+class Rainbow(Effect):
+    """曜彩标记：获得 1 次曜彩骰使用次数，实际结算在骰子的 trigger_dice 中完成。"""
 
 
 # =====曜彩骰定义部分=====
@@ -1092,7 +1205,7 @@ class RealSixSixDice(Dice):
                 {"effect": None, "value": 6},
                 {"effect": None, "value": 6},
             ],
-            "真·666",
+            "真•6•6",
         )
 
 
@@ -1109,7 +1222,7 @@ class RealRepeat(Dice):
                 {"effect": DoubleShot, "value": 4},
                 {"effect": DoubleShot, "value": 4},
             ],
-            "真·复读",
+            "真•复读",
         )
         self.chose_four = 0
 
@@ -1149,7 +1262,7 @@ class RealWarManiac(Dice):
                 {"effect": Thorn, "value": 12},
                 {"effect": Thorn, "value": 12},
             ],
-            "真·战狂",
+            "真•战狂",
         )
 
     def trigger_dice(self) -> GamePatch:
@@ -1166,8 +1279,445 @@ class RealWarManiac(Dice):
         return GamePatch()
 
 
+class RealEvolution(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 3},
+                {"effect": None, "value": 3},
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 6},
+                {"effect": Double, "value": 2},
+            ],
+            "真•进化",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Double:
+            return GamePatch(effects_to_add=[(self.master.role, Double(self.master))])
+        return GamePatch()
+
+
+class RealFate(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 1, "must_select": True},
+                {"effect": None, "value": 3, "must_select": True},
+                {"effect": None, "value": 3, "must_select": True},
+                {"effect": None, "value": 12, "must_select": True},
+                {"effect": None, "value": 12, "must_select": True},
+                {"effect": None, "value": 16, "must_select": True},
+            ],
+            "真•命运",
+        )
+
+
+class RealRevenge(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 8},
+                {"effect": None, "value": 8},
+                {"effect": None, "value": 12},
+                {"effect": None, "value": 12},
+            ],
+            "真•复仇",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return bool(
+            self.master.role == "attacker" and self.master.total_damage_taken >= 25
+        )
+
+
+class RealMedicalAdvice(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": Recover, "value": 1},
+                {"effect": Recover, "value": 2},
+                {"effect": Recover, "value": 3},
+                {"effect": Recover, "value": 4},
+                {"effect": Recover, "value": 6},
+                {"effect": Recover, "value": 6},
+            ],
+            "真•医嘱",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Recover:
+            return GamePatch(
+                effects_to_add=[
+                    (self.master.role, Recover(self.master, self.now_value))
+                ]
+            )
+        return GamePatch()
+
+
+class RealLastWords(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 5},
+                {"effect": None, "value": 5},
+                {"effect": Double, "value": 1},
+                {"effect": Double, "value": 2},
+                {"effect": Double, "value": 4},
+            ],
+            "真•遗语",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return self.master.hp <= 8
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Double:
+            return GamePatch(effects_to_add=[(self.master.role, Double(self.master))])
+        return GamePatch()
+
+
+class RealCactus(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": Counterattack, "value": 4},
+                {"effect": Counterattack, "value": 5},
+                {"effect": Counterattack, "value": 6},
+                {"effect": Counterattack, "value": 7},
+                {"effect": Counterattack, "value": 8},
+                {"effect": Counterattack, "value": 9},
+            ],
+            "真•仙人球",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return self.master.role == "defender"
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Counterattack:
+            return GamePatch(
+                effects_to_add=[(self.master.role, Counterattack(self.master, True))]
+            )
+        return GamePatch()
+
+
+class RealMiracle(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 99},
+                {"effect": None, "value": 99},
+                {"effect": None, "value": 99},
+                {"effect": None, "value": 99},
+                {"effect": None, "value": 99},
+                {"effect": None, "value": 99},
+            ],
+            "真•奇迹",
+        )
+        self.chose_one = 0
+
+    def before_sum(self, view: GameView):
+        if not self.master:
+            return
+        for dice in self.master.selected_dice:
+            if dice.now_value == 1:
+                self.chose_one += 1
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return bool(self.master.role == "attacker" and self.chose_one >= 9)
+
+
+class RealLoan(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": Overload, "value": 2},
+                {"effect": Overload, "value": 2},
+                {"effect": Overload, "value": 3},
+                {"effect": Overload, "value": 3},
+                {"effect": Overload, "value": 4},
+                {"effect": Overload, "value": 4},
+            ],
+            "真•贷款",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Overload:
+            return GamePatch(
+                effects_to_add=[
+                    (self.master.role, Overload(self.master, self.now_value))
+                ]
+            )
+        return GamePatch()
+
+
+class RealStarShield(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 7},
+                {"effect": None, "value": 7},
+                {"effect": None, "value": 7},
+                {"effect": ForceFields, "value": 1},
+                {"effect": ForceFields, "value": 1},
+                {"effect": ForceFields, "value": 1},
+            ],
+            "真•星盾",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return self.master.role == "defender"
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == ForceFields:
+            return GamePatch(
+                effects_to_add=[(self.master.role, ForceFields(self.master, True))]
+            )
+        return GamePatch()
+
+
+class RealOath(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 8},
+                {"effect": None, "value": 8},
+                {"effect": Unyield, "value": 4},
+                {"effect": Unyield, "value": 4},
+                {"effect": Unyield, "value": 6},
+                {"effect": Unyield, "value": 6},
+            ],
+            "真•誓言",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return self.master.role == "defender"
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Unyield:
+            return GamePatch(
+                effects_to_add=[(self.master.role, Unyield(self.master, True))]
+            )
+        return GamePatch()
+
+
+class RealPrime(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 5},
+                {"effect": None, "value": 5},
+                {"effect": None, "value": 5},
+                {"effect": None, "value": 7},
+                {"effect": None, "value": 7},
+                {"effect": None, "value": 7},
+            ],
+            "真•质数",
+        )
+
+
+class BigRedButton(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": LastStand, "value": 6},
+                {"effect": LastStand, "value": 6},
+                {"effect": LastStand, "value": 6},
+                {"effect": LastStand, "value": 8},
+                {"effect": LastStand, "value": 8},
+                {"effect": LastStand, "value": 8},
+            ],
+            "大红按钮",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        if not self.master:
+            return False
+        return bool(self.master.role == "attacker" and view.round >= 5)
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role or self.now_effect != LastStand:
+            return GamePatch()
+        reduction = max(0, self.master.hp - 1)
+        return GamePatch(
+            add_extra_attack=reduction,
+            player_state_changes=[(self.master.role, "hp", 1)],
+        )
+
+
+class RealMagician(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 4},
+                {"effect": None, "value": 4},
+                {"effect": Hack, "value": 4},
+                {"effect": Hack, "value": 6},
+                {"effect": Hack, "value": 6},
+            ],
+            "真•奇术师",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Hack:
+            return GamePatch(effects_to_add=[(self.master.role, Hack(self.master))])
+        return GamePatch()
+
+
+class RealHeartbeat(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 1},
+                {"effect": Rainbow, "value": 9},
+                {"effect": Rainbow, "value": 9},
+            ],
+            "真•心跳",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == Rainbow:
+            return GamePatch(
+                player_state_changes=[
+                    (self.master.role, "use_spe_times", self.master.use_spe_times + 1)
+                ]
+            )
+        return GamePatch()
+
+
+class RealGambler(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 1},
+                {"effect": None, "value": 6},
+                {"effect": None, "value": 8},
+                {"effect": None, "value": 10},
+                {"effect": None, "value": 12},
+            ],
+            "真•赌徒",
+        )
+
+    def can_use(self, view: GameView) -> bool:
+        return view.round <= 4
+
+
+class RealMagicBullet(Dice):
+    def __init__(self) -> None:
+        super().__init__(
+            6,
+            True,
+            [
+                {"effect": None, "value": 3},
+                {"effect": None, "value": 5},
+                {"effect": None, "value": 7},
+                {"effect": InstantDamage, "value": 3},
+                {"effect": InstantDamage, "value": 5},
+                {"effect": InstantDamage, "value": 7},
+            ],
+            "真•魔弹",
+        )
+
+    def trigger_dice(self) -> GamePatch:
+        if not self.master or not self.master.role:
+            return GamePatch()
+        if self.now_effect == InstantDamage:
+            return GamePatch(
+                effects_to_add=[
+                    (self.master.role, InstantDamage(self.master, self.now_value))
+                ]
+            )
+        return GamePatch()
+
+
 special_dices = [
+    RealEvolution(),
     RealSixSixDice(),
+    RealFate(),
+    RealRevenge(),
+    RealMedicalAdvice(),
+    RealLastWords(),
     RealRepeat(),
+    RealCactus(),
+    RealMiracle(),
+    RealLoan(),
+    RealStarShield(),
+    RealOath(),
+    RealPrime(),
+    BigRedButton(),
+    RealMagician(),
+    RealHeartbeat(),
     RealWarManiac(),
+    RealGambler(),
+    RealMagicBullet(),
 ]

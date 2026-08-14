@@ -4,6 +4,8 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
+from typing_extensions import NotRequired
+
 from .player.dice import Dice
 
 if TYPE_CHECKING:
@@ -108,6 +110,14 @@ class GameView:
         return self._game.defender_extra_sum
 
     @property
+    def attacker_multiplier(self) -> int:
+        return self._game.attacker_multiplier
+
+    @property
+    def defender_multiplier(self) -> int:
+        return self._game.defender_multiplier
+
+    @property
     def reload_times(self) -> int:
         return self._game.reload_times
 
@@ -129,8 +139,11 @@ class GameView:
 
 class DamageDict(TypedDict):
     role: Literal["attacker", "defender"]
-    type: Literal["common", "poisoning", "instant", "thorn", "counterattack", "blade"]
+    type: Literal[
+        "common", "poisoning", "instant", "thorn", "counterattack", "blade", "overload"
+    ]
     count: int
+    pierce: NotRequired[bool]
 
 
 class GamePatch:
@@ -155,9 +168,9 @@ class GamePatch:
         upgrade_dice_requests: list[Dice] | None = None,
         player_state_changes: list[tuple[Literal["attacker", "defender"], str, Any]]
         | None = None,
-        intend_hack: list[tuple[Literal["attacker", "defender"], int]] | None = None,
-        intend_leap: list[tuple[Literal["attacker", "defender"], int]] | None = None,
         effects_to_consume: Sequence[Effect] | None = None,
+        multiply_attack: int = 1,
+        multiply_defence: int = 1,
     ) -> None:
         self.damage: list[DamageDict] = damage if damage is not None else []
         self.add_reload_times = add_reload_times
@@ -182,18 +195,16 @@ class GamePatch:
         self.player_state_changes: list[
             tuple[Literal["attacker", "defender"], str, Any]
         ] = player_state_changes if player_state_changes is not None else []
-        self.intend_hack: list[tuple[Literal["attacker", "defender"], int]] = (
-            intend_hack if intend_hack is not None else []
-        )
-        self.intend_leap: list[tuple[Literal["attacker", "defender"], int]] = (
-            intend_leap if intend_leap is not None else []
-        )
         self.effects_to_consume: list[Effect] = (
             list(effects_to_consume) if effects_to_consume is not None else []
         )
+        self.multiply_attack = multiply_attack
+        """攻击方总点数的乘数（如“翻倍”）"""
+        self.multiply_defence = multiply_defence
+        """防御方总点数的乘数（如“翻倍”）"""
 
     def __str__(self) -> str:
-        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nHacks intend:{self.intend_hack}\nEffects to consume:{self.effects_to_consume}"
+        return f"Patch:\nDamage list:{self.damage}\nReload times add:{self.add_reload_times}\nExtra attack add:{self.add_extra_attack}\nExtra defence add:{self.add_extra_defence}\nAdd effects list:{self.effects_to_add}\nDice value changes:{self.dice_value_changes}\nPlayer changes:{self.player_state_changes}\nEffects to consume:{self.effects_to_consume}"
 
     def __bool__(self):
         return any(
@@ -211,9 +222,9 @@ class GamePatch:
                 self.dice_value_changes,
                 self.upgrade_dice_requests,
                 self.player_state_changes,
-                self.intend_hack,
-                self.intend_leap,
                 self.effects_to_consume,
+                self.multiply_attack != 1,
+                self.multiply_defence != 1,
             ]
         )
 
@@ -237,25 +248,6 @@ class GamePatch:
                     {"role": dam["role"], "type": dam["type"], "count": dam["count"]}
                 )
 
-        # 合并骇入意图（按目标 role 累加数量）
-        merged_hack: dict[Literal["attacker", "defender"], int] = {}
-        for role, count in self.intend_hack:
-            merged_hack[role] = merged_hack.get(role, 0) + count
-        for role, count in other.intend_hack:
-            merged_hack[role] = merged_hack.get(role, 0) + count
-        merged_hack_list: list[tuple[Literal["attacker", "defender"], int]] = [
-            (role, count) for role, count in merged_hack.items()
-        ]
-
-        merged_leap: dict[Literal["attacker", "defender"], int] = {}
-        for role, count in self.intend_leap:
-            merged_leap[role] = merged_leap.get(role, 0) + count
-        for role, count in other.intend_leap:
-            merged_leap[role] = merged_leap.get(role, 0) + count
-        merged_leap_list: list[tuple[Literal["attacker", "defender"], int]] = [
-            (role, count) for role, count in merged_leap.items()
-        ]
-
         return GamePatch(
             damage=merged_damage,
             add_reload_times=self.add_reload_times + other.add_reload_times,
@@ -278,10 +270,10 @@ class GamePatch:
             ),
             player_state_changes=list(self.player_state_changes)
             + list(other.player_state_changes),
-            intend_hack=merged_hack_list,
-            intend_leap=merged_leap_list,
             effects_to_consume=list(self.effects_to_consume)
             + list(other.effects_to_consume),
+            multiply_attack=self.multiply_attack * other.multiply_attack,
+            multiply_defence=self.multiply_defence * other.multiply_defence,
         )
 
     @staticmethod
@@ -310,32 +302,35 @@ class GameContext:
     def _get_player(self, role: Literal["attacker", "defender"]) -> Player:
         return self._game.attacker if role == "attacker" else self._game.defender
 
-    def _get_player_siphon(self, target: Player):
-        from .player.default import Siphon
-
-        for eff in target.effects:
-            if isinstance(eff, Siphon):
-                return True
-        return False
-
     def apply_patch(self, patch: GamePatch) -> None:
         """将一个（已合并的）GamePatch 应用到 GameManager。"""
         if not patch:
             return
-        from .player.default import Unyield
 
-        # 伤害
+        # 伤害：先由存活效果修饰（如不屈钳制、力场免疫、洞穿无视防御），
+        # 落定后再触发效果反应（如虹吸回血）。
         for dam in patch.damage:
             target = self._get_player(dam["role"])
-            fin_cost = dam["count"]
-            if Unyield in [type(eff) for eff in target.effects]:
-                fin_cost = min(fin_cost, target.hp - 1)
-            target.hp -= fin_cost
+            view = self.create_view()
+            # 先攻击方效果、后防御方效果，保证“洞穿”能压制“力场”
+            for player in (self._game.attacker, self._game.defender):
+                for effect in player.effects:
+                    if effect.alive:
+                        dam = effect.filter_damage(dam, view)
+            fin_cost = max(0, dam["count"])
+            target.hp = max(0, target.hp - fin_cost)
+            target.total_damage_taken += fin_cost
             if fin_cost != 0:
                 target.attack_in_round = True
-            layers = self._get_player_siphon(self._get_player("attacker"))
-            if layers and dam["type"] == "common" and fin_cost > 0:
-                self.apply_patch(GamePatch(add_attacker_hp=int(fin_cost * 0.5)))
+            after_damage_patches: list[GamePatch] = []
+            for player in (self._game.attacker, self._game.defender):
+                for effect in player.effects:
+                    if effect.alive:
+                        reaction = effect.after_damage(dam, view)
+                        if reaction:
+                            after_damage_patches.append(reaction)
+            if after_damage_patches:
+                self.apply_patch(GamePatch.merge_all(after_damage_patches))
 
         # 回复血量
         self._game.attacker.hp = min(
@@ -374,6 +369,10 @@ class GameContext:
         # 额外点数
         self._game.attacker_extra_sum += patch.add_extra_attack
         self._game.defender_extra_sum += patch.add_extra_defence
+
+        # 总点数乘数（如“翻倍”）
+        self._game.attacker_multiplier *= patch.multiply_attack
+        self._game.defender_multiplier *= patch.multiply_defence
 
         # 重投次数
         self._game.reload_times += patch.add_reload_times
@@ -429,31 +428,6 @@ class GameContext:
         for role, attr, value in patch.player_state_changes:
             target = self._get_player(role)
             setattr(target, attr, value)
-
-        # 骇入意图：对目标角色已选骰子中点数大于 2 的最大 X 个骰子改为 2
-        for role, count in patch.intend_hack:
-            target = self._get_player(role)
-            candidates = [
-                (i, dice.now_value)
-                for i, dice in enumerate(target.selected_dice)
-                if not dice.special and dice.now_value > 2
-            ]
-            candidates.sort(key=lambda x: x[1], reverse=True)
-            for index, _ in candidates[:count]:
-                target.selected_dice[index].now_value = 2
-
-        for role, count in patch.intend_leap:
-            target = self._get_player(role)
-            for _ in range(count):
-                candidates = [
-                    (i, dice.now_value)
-                    for i, dice in enumerate(target.selected_dice)
-                    if not dice.special
-                ]
-                candidates.sort(key=lambda x: x[1])
-                target.selected_dice[candidates[0][0]].now_value = target.selected_dice[
-                    candidates[0][0]
-                ].sides
 
         # 消耗效果（如连击触发后置死）
         for effect in patch.effects_to_consume:

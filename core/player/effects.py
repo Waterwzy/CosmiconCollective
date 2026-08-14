@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .player import Player
 
-from ..context import GamePatch, GameView
+from ..context import DamageDict, GamePatch, GameView
 
 
 class Effect:
@@ -45,3 +45,17 @@ class Effect:
 
     def trigger(self, view: GameView) -> GamePatch | None:
         """需要特殊触发的效果"""
+
+    def filter_damage(self, damage: DamageDict, view: GameView) -> DamageDict:
+        """在伤害落定前修改该次伤害（如“不屈”的钳制、“力场”的免疫），返回修改后的伤害。"""
+        return damage
+
+    def after_damage(self, damage: DamageDict, view: GameView) -> GamePatch | None:
+        """在某次伤害落定后触发，damage 为实际生效的伤害（如“虹吸”的回血）。"""
+
+    def extra_hits(self, view: GameView) -> int:
+        """本效果提供的额外攻击次数（如“连击”），默认 0。"""
+        return 0
+
+    def after_extra_hits(self, view: GameView) -> GamePatch | None:
+        """所有追加攻击结算完毕后触发（可用于自我消耗）。"""

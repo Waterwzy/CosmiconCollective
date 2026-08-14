@@ -1,2 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cosmicon-collective"
+version = "0.1.0"
+description = "复刻《崩坏：星穹铁道》银河战力党的小游戏（后端）"
+requires-python = ">=3.10"
+dependencies = ["loguru", "typing_extensions>=4.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.9"]
+
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+include = ["core*"]
+
 [tool.ruff.lint]
 ignore = ["N999"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

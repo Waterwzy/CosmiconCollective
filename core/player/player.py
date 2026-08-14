@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from ..context import GamePatch, GameView
 from .dice import Dice
@@ -65,6 +65,8 @@ class Player:
         """骰子是否可以投出最大值"""
         self.attack_in_round = False
         """当前回合中是否受到伤害"""
+        self.total_damage_taken = 0
+        """整局累计受到的伤害（含全部伤害类型，永不清零）"""
 
     def __str__(self) -> str:
         return f"{self.id}(pid:{self.pid})"
@@ -102,6 +104,9 @@ class Player:
             if i < 0 or i >= len(self.dices):
                 return False
         if action == 1:
+            for i, dice in enumerate(self.dices):
+                if dice.must_select and i not in selected:
+                    return False
             if role == "attack":
                 if self.attack_dice == Select.NO_LIMIT:
                     return True
@@ -113,7 +118,11 @@ class Player:
         return True
 
     def select_dice(
-        self, role: Literal["attack", "defence"], reload_times: int, view: GameView
+        self,
+        role: Literal["attack", "defence"],
+        reload_times: int,
+        view: GameView,
+        rng: random.Random | None = None,
     ) -> tuple[int, list]:
         """
         Returns: tuple(action , list)
@@ -121,11 +130,12 @@ class Player:
             act_list(list):操作骰子列表
         """
         if self.is_agent:
+            rng = rng if rng is not None else cast(random.Random, random)
             if self.role == "attacker":
                 if isinstance(self.attack_dice, int):
                     return (
                         1,
-                        random.sample(
+                        rng.sample(
                             range(len(self.dices)),
                             self.attack_dice,
                         ),
@@ -133,15 +143,15 @@ class Player:
                 else:
                     return (
                         1,
-                        random.sample(
-                            range(len(self.dices)), random.randint(1, len(self.dices))
+                        rng.sample(
+                            range(len(self.dices)), rng.randint(1, len(self.dices))
                         ),
                     )
             elif self.role == "defender":
                 if isinstance(self.defence_dice, int):
                     return (
                         1,
-                        random.sample(
+                        rng.sample(
                             range(len(self.dices)),
                             self.defence_dice,
                         ),
@@ -149,54 +159,42 @@ class Player:
                 else:
                     return (
                         1,
-                        random.sample(
-                            range(len(self.dices)), random.randint(1, len(self.dices))
+                        rng.sample(
+                            range(len(self.dices)), rng.randint(1, len(self.dices))
                         ),
                     )
         select_list = []
         action = None
         while not self._legal_select(select_list, action, role, reload_times, view):
-            select_list = list(
-                map(
-                    int,
-                    input(
-                        f"输入骰子的index，确认可用骰子数量为{self.attack_dice if role == 'attack' else self.defence_dice}\n"
-                    ).split(),
+            try:
+                select_list = list(
+                    map(
+                        int,
+                        input(
+                            f"输入骰子的index，确认可用骰子数量为{self.attack_dice if role == 'attack' else self.defence_dice}\n"
+                        ).split(),
+                    )
                 )
-            )
-            action = int(input("输入你的行为（1为确认2为重投3为使用曜彩骰）"))
+                action = int(input("输入你的行为（1为确认2为重投3为使用曜彩骰）"))
+            except ValueError:
+                print("输入无效，请重新输入。")
+                select_list = []
+                action = None
+            except EOFError:
+                raise SystemExit("输入已结束，游戏退出。")
         assert action is not None
         return action, select_list
 
     def begin_attack(self, view: GameView, hurts: int) -> GamePatch:
         """生成该击的伤害 GamePatch。
 
-        力场（ForceFields）只免疫普通伤害（common）。
-        洞穿（Pierce）无视防御和力场效果。
-        连击（DoubleShot）的多次攻击由 GameManager 统一结算，本方法只计算一次攻击。
+        普通伤害的具体数值由效果钩子 filter_damage 分阶段修改：
+        先攻击方效果（如洞穿无视防御），后防御方效果（如力场免疫伤害）。
         受击后行为（after_being_attacked）由 GameManager 在伤害结算后单独触发。
         """
-        from .default import ForceFields, Pierce
-
         if self.role is None:
             return GamePatch()
-        has_forcefield = any(
-            isinstance(effect, ForceFields) and effect.alive for effect in self.effects
-        )
-
-        has_pierce = any(
-            isinstance(effect, Pierce) and effect.alive
-            for effect in view.attacker.effects
-        )
-        if has_pierce:
-            common_damage = view.attacker_sum + view.attacker_extra_sum
-        elif has_forcefield:
-            common_damage = 0
-        else:
-            common_damage = hurts
-        return GamePatch(
-            damage=[{"role": self.role, "type": "common", "count": common_damage}]
-        )
+        return GamePatch(damage=[{"role": self.role, "type": "common", "count": hurts}])
 
     def clear_effects(self):
         self.effects = [

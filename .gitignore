@@ -1,3 +1,6 @@
 __pycache__/
 .vscode/
 .ruff_cache/
+build/
+*.egg-info/
+.pytest_cache/
