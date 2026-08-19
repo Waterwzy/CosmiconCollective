@@ -7,16 +7,17 @@ name = "cosmicon-collective"
 version = "0.1.0"
 description = "复刻《崩坏：星穹铁道》银河战力党的小游戏（后端）"
 requires-python = ">=3.10"
-dependencies = ["loguru", "typing_extensions>=4.0"]
+dependencies = ["loguru", "typing_extensions>=4.0", "httpx>=0.27"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.9"]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [tool.setuptools]
 py-modules = ["main"]
 
 [tool.setuptools.packages.find]
-include = ["core*"]
+include = ["core*", "webui*"]
 
 [tool.ruff.lint]
 ignore = ["N999"]

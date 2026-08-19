@@ -12,7 +12,15 @@ class OneShotPlayer(Player):
 
     def __init__(self, pid: int) -> None:
         super().__init__(
-            pid, "一击必杀测试卡", 50, 3, 3, [Dice(6) for _ in range(4)], is_agent=True
+            pid,
+            "一击必杀测试卡",
+            50,
+            3,
+            3,
+            [Dice(6) for _ in range(4)],
+            "测试用一击必杀",
+            [],
+            is_agent=True,
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch:

@@ -14,7 +14,14 @@ from .player import Player
 class DefaultPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            0, "默认测试卡牌", 30, 3, 3, [Dice(4), Dice(6), Dice(6), Dice(8)]
+            0,
+            "默认测试卡牌",
+            30,
+            3,
+            3,
+            [Dice(4), Dice(6), Dice(6), Dice(8)],
+            "默认",
+            [],
         )
 
 
@@ -27,280 +34,23 @@ class DefaultAIPlayer(Player):
             3,
             3,
             [Dice(4), Dice(6), Dice(6), Dice(8)],
+            "默认",
+            [],
             is_agent=True,
         )
-
-
-class ChimeraPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            2,
-            "奇美拉",
-            22,
-            3,
-            2,
-            [Dice(4), Dice(4), Dice(6), Dice(6)],
-        )
-
-    def after_effect_settle(self, view: GameView) -> GamePatch | None:
-        if self.role != "attacker":
-            return None
-        sum_dict: dict[int, int] = {}
-        for dice in self.selected_dice:
-            sum_dict[dice.now_value] = sum_dict.get(dice.now_value, 0) + 1
-        add_sum = 0
-        flag = False
-        for value, count in sum_dict.items():
-            if count >= 2 and not flag:
-                add_sum = 3
-                if value == 4:
-                    add_sum = 7
-                    flag = True
-        if add_sum == 0:
-            return None
-        return GamePatch(add_extra_attack=add_sum)
-
-
-class KleSparSparPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            3,
-            "火花花",
-            25,
-            3,
-            2,
-            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
-        )
-
-    def after_attack_sum(self, view: GameView) -> GamePatch | None:
-        if self.hp != 25 and self.role is not None:
-            return GamePatch(effects_to_add=[(self.role, Hack(self))])
-        return None
-
-
-class BatRaccoonPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            4,
-            "开拓妖精",
-            15,
-            3,
-            3,
-            [Dice(4), Dice(4), Dice(4), Dice(6)],
-        )
-
-    def after_defence_sum(self, view: GameView) -> GamePatch | None:
-        values = [dice.now_value for dice in self.selected_dice]
-        if len(values) != len(set(values)) and self.role is not None:
-            return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 4))])
-        return None
-
-    def before_defence_select(self, view: GameView) -> GamePatch | None:
-        return GamePatch(add_reload_times=1)
-
-
-class DormasPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            5,
-            "大地兽",
-            26,
-            3,
-            2,
-            [Dice(4), Dice(4), Dice(6), Dice(6)],
-        )
-
-    def after_attack_sum(self, view: GameView) -> GamePatch | None:
-        for dice in self.selected_dice:
-            if dice.now_value % 2 != 0:
-                return None
-        if self.role is not None:
-            return GamePatch(effects_to_add=[(self.role, Poisoning(self, 2))])
-        return None
-
-
-class RubbishBinPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            6, "阮·梅造物", 25, 4, 2, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(4)]
-        )
-
-    def after_effect_settle(self, view: GameView) -> GamePatch | None:
-        if self.role != "attacker":
-            return None
-        selected_dict: dict[int, int] = {}
-        for dice in self.selected_dice:
-            selected_dict[dice.now_value] = selected_dict.get(dice.now_value, 0) + 1
-        max_v = max(selected_dict.values(), default=0)
-        if max_v < 3:
-            return None
-        return GamePatch(add_extra_attack=(int(max_v) - 2) * 7)
-
-
-class TrafficLightPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            7, "自动机兵·甲虫", 10, 3, 3, [Dice(4), Dice(4), Dice(4), Dice(6)]
-        )
-        self.get_s_round: int = -1
-
-    def before_defence_select(self, view: GameView) -> GamePatch | None:
-        return GamePatch(add_reload_times=1)
-
-    def after_defence_sum(self, view: GameView) -> GamePatch | None:
-        if self.role is None:
-            return None
-        m_len = helper.max_continue_dices(self)
-        if m_len >= 3:
-            return GamePatch(
-                effects_to_add=[(self.role, ForceFields(self, True))],
-                player_state_changes=[(self.role, "get_s_round", view.round + 1)],
-            )
-        return None
-
-    def round_start(self, view: GameView) -> GamePatch | None:
-        if self.role is None:
-            return None
-        if view.round == self.get_s_round:
-            return GamePatch(
-                effects_to_add=[(self.role, Strength(self, 8, True))],
-                player_state_changes=[(self.role, "get_s_round", -1)],
-            )
-        return None
-
-
-class CivetPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            8, "狸猫记者", 28, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(6)]
-        )
-
-    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
-        if hp_sum <= 0 or self.role is None:
-            return None
-        for dice in self.selected_dice:
-            if dice.now_value % 2 == 0:
-                return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 2))])
-        return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 4))])
-
-
-class ScootPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            9, "斯科特", 22, 3, 2, [Dice(4), Dice(4), Dice(6), Dice(8), Dice(8)]
-        )
-
-    def after_attack_sum(self, view: GameView) -> GamePatch | None:
-        if self.role is None:
-            return None
-        max_c = helper.max_continue_dices(self)
-        if max_c < 3:
-            return None
-        target_role: Literal["attacker", "defender"] = (
-            "defender" if self.role == "attacker" else "attacker"
-        )
-        for effect in view.get_player_view(target_role).effects:
-            if isinstance(effect, Disturbance):
-                extra_effects: list[tuple[Literal["attacker", "defender"], Effect]] = []
-                if effect.layer + 1 >= 2:
-                    extra_effects.append((self.role, InstantDamage(self, 5)))
-                return GamePatch(
-                    effects_to_add=extra_effects
-                    + [(target_role, Disturbance(self, 1))],
-                )
-        return GamePatch(effects_to_add=[(target_role, Disturbance(self, 1))])
-
-
-class CompanyWorkerPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            10,
-            "基层员工·安保",
-            26,
-            3,
-            2,
-            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
-            load_max=False,
-        )
-
-    def on_game_start(self, view: GameView) -> GamePatch | None:
-        if self.role is None:
-            return None
-        return GamePatch(effects_to_add=[(self.role, Strength(self, 5, False))])
-
-
-class OverManPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            11,
-            "蕉研组的财富蕉师",
-            24,
-            4,
-            3,
-            [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)],
-        )
-        self.trigger_once = False
-
-    def before_defence_select(self, view: GameView) -> GamePatch | None:
-        return GamePatch(add_reload_times=1)
-
-    def after_settlement(self, view: GameView) -> GamePatch | None:
-        patch_list = []
-        if not self.trigger_once and self.hp <= 5:
-            patch_list.append(
-                GamePatch(
-                    player_state_changes=[("defender", "trigger_once", True)],
-                    effects_to_add=[(self.role, AddDefenceLevel(self, 1))]
-                    if self.role
-                    else [],
-                )
-            )
-        if self.role == "defender" and not self.attack_in_round:
-            patch_list.append(
-                GamePatch(effects_to_add=[("defender", Recover(self, 5))])
-            )
-        if not patch_list:
-            return
-        return GamePatch.merge_all(patch_list)
-
-
-class TeamLeaderPlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            12, "资深员工·组长", 22, 3, 2, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(8)]
-        )
-
-    def after_attack_sum(self, view: GameView) -> GamePatch | None:
-        selected = [dice.now_value for dice in view.attacker.selected_dice]
-        return GamePatch(add_extra_attack=len(set(selected)))
-
-    def after_defence_sum(self, view: GameView) -> GamePatch | None:
-        selected = [dice.now_value for dice in view.defender.selected_dice]
-        return GamePatch(add_extra_defence=len(set(selected)))
-
-
-class CastoricePlayer(Player):
-    def __init__(self) -> None:
-        super().__init__(
-            13, "遐蝶", 27, 3, 2, [Dice(4), Dice(4), Dice(6), Dice(8), Dice(8)]
-        )
-
-    def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
-        if hp_sum >= 8 and self.role == "defender":
-            return GamePatch(
-                effects_to_add=[
-                    (self.role, AddDefenceLevel(self, 1)),
-                    (self.role, AddAttackLevel(self, 1)),
-                ]
-            )
-        elif hp_sum <= 5 and self.role and hp_sum > 0:
-            return GamePatch(effects_to_add=[(self.role, InstantDamage(self, 3))])
 
 
 class YellowSpringPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            14, "黄泉", 33, 2, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(8)]
+            2,
+            "黄泉",
+            33,
+            2,
+            3,
+            [Dice(4), Dice(4), Dice(4), Dice(6), Dice(8)],
+            "攻击时：若选定的骰子点数全为4，则本次攻击获得洞穿；每成功触发一次洞穿，攻击等级+1。",
+            [Pierce],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -318,7 +68,14 @@ class YellowSpringPlayer(Player):
 class FireflyPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            15, "流萤", 28, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)]
+            3,
+            "流萤",
+            28,
+            4,
+            3,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)],
+            "攻击时：若选定的骰子包含2组2个相同点数，则本次攻击获得连击。如果自身满生命值，攻击值+5。",
+            [DoubleShot],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -344,7 +101,14 @@ class FireflyPlayer(Player):
 class RobinPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            16, "知更鸟", 30, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)]
+            4,
+            "知更鸟",
+            30,
+            4,
+            3,
+            [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)],
+            "攻击时：若选定的骰子全为偶数，则使选定的骰子获得升级。",
+            [Upgrade],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -357,7 +121,14 @@ class RobinPlayer(Player):
 class BigHertaPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            17, "大黑塔", 42, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+            5,
+            "大黑塔",
+            42,
+            3,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)],
+            "回合结束时：获得1次曜彩骰使用次数。若已触发4次以上曜彩骰的特殊效果，则此后每回合获得跃升。",
+            [Leap],
         )
         self.use_spe = 0
 
@@ -378,7 +149,14 @@ class BigHertaPlayer(Player):
 class KafukaPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            18, "卡芙卡", 30, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)]
+            6,
+            "卡芙卡",
+            30,
+            4,
+            3,
+            [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)],
+            "攻击时：选定的骰子每有一个不同的点数，便使对方陷入1层中毒。防御失败时，移除对方1层中毒。",
+            [Poisoning],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -395,7 +173,14 @@ class KafukaPlayer(Player):
 class AventurinePlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            19, "砂金", 33, 4, 2, [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)]
+            7,
+            "砂金",
+            33,
+            4,
+            2,
+            [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)],
+            "攻击时：选定的骰子里每有1个奇数，则获得1层韧性。韧性累计至7层时，立即造成7点瞬伤，并移除7层韧性。",
+            [Resilience, InstantDamage],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -421,7 +206,14 @@ class AventurinePlayer(Player):
 class MartchSeventhPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            20, "三月七", 25, 4, 3, [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)]
+            8,
+            "三月七",
+            25,
+            4,
+            3,
+            [Dice(4), Dice(4), Dice(4), Dice(6), Dice(6)],
+            "攻击或防御时：选定的骰子每出现1组2个相同点数，立刻造成3点瞬伤。",
+            [InstantDamage],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -443,7 +235,14 @@ class MartchSeventhPlayer(Player):
 class DesolateDanHengPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            21, "丹恒·腾荒", 25, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+            9,
+            "丹恒·腾荒",
+            25,
+            3,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)],
+            "攻击时：若攻击值≥18，下次防御时防御等级+3，并获得反击，防御结束将还原至初始防御等级。",
+            [AddDefenceLevel, Counterattack],
         )
         self.round_add_denfece = -1
 
@@ -472,7 +271,14 @@ class DesolateDanHengPlayer(Player):
 class KleSparPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            22, "火花", 22, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)]
+            10,
+            "火花",
+            22,
+            4,
+            3,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
+            "攻击或防御时：若选定的骰子包含相同点数，则获得骇入。",
+            [Hack],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -489,7 +295,14 @@ class KleSparPlayer(Player):
 class YaoGuangPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            23, "爻光", 35, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+            11,
+            "爻光",
+            35,
+            3,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)],
+            "攻击时：获得4次重投机会；在单回合内超过2次重投后，每次重投会获得2层荆棘。此外，若攻击值≥18，则移除所有荆棘，并获得1次曜彩骰使用次数。",
+            [Thorn],
         )
         self.reload_this_round = 0
 
@@ -520,7 +333,14 @@ class YaoGuangPlayer(Player):
 class CyrenePlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            24, "昔涟", 30, 3, 2, [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)]
+            12,
+            "昔涟",
+            30,
+            3,
+            2,
+            [Dice(4), Dice(6), Dice(6), Dice(6), Dice(8)],
+            "将每回合自身的攻击值与防御值进行累加，总计超过24后，攻击等级变为5，此后每回合获得跃升。",
+            [AddAttackLevel, Leap],
         )
         self.all_sum = 0
 
@@ -557,7 +377,14 @@ class CyrenePlayer(Player):
 class PhainonPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            25, "白厄", 20, 4, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+            13,
+            "白厄",
+            20,
+            4,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)],
+            "攻击时：虹吸自己造成伤害数额50%的生命值。防御时：若选定的骰子点数全部相同，则获得不屈，最多触发1次。",
+            [Siphon, Unyield],
         )
         self.has_unyield = False
 
@@ -578,7 +405,14 @@ class PhainonPlayer(Player):
 class HyacinePlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            26, "风堇", 28, 2, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(8)]
+            14,
+            "风堇",
+            28,
+            2,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(6), Dice(8)],
+            "攻击后：将力量层数设置为本次攻击值的50%；若选定的骰子点数全为6，则设置为100%并治愈6点生命值。",
+            [Strength, Recover],
         )
 
     def _get_strength_layers(self):
@@ -616,7 +450,14 @@ class HyacinePlayer(Player):
 class SliverWolfPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            27, "银狼LV.999", 36, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(6)]
+            15,
+            "银狼LV.999",
+            36,
+            3,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(6), Dice(6)],
+            "攻击或防御时：选定的骰子中若包含点数1，则获得跃升；若包含点数6，则获得骇入。跃升和骇入每回合最多只能通过本技能各获得一次。",
+            [Hack, Leap],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -637,12 +478,14 @@ class SliverWolfPlayer(Player):
 class EvanesciaPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            28,
+            16,
             "绯英",
             30,
             helper.Select.NO_LIMIT,
             3,
             [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
+            "攻击时：可以选定任意数量的骰子（至少一个），本次攻击若选定3个以下骰子则获得连击，若只选定一个骰子则再获得洞穿。",
+            [DoubleShot, Pierce],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -659,7 +502,14 @@ class EvanesciaPlayer(Player):
 class MyPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            29, "开拓者", 36, 3, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(6)]
+            17,
+            "开拓者",
+            36,
+            3,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(6), Dice(6)],
+            "攻击时：选定的骰子中每有一个点数为6，则攻击值+2。重掷时：若将曜彩骰以外的骰子掷出点数6，则恢复一次重掷次数。",
+            [],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -678,7 +528,14 @@ class MyPlayer(Player):
 class AshveilPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            30, "不死途", 23, 3, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)]
+            18,
+            "不死途",
+            23,
+            3,
+            3,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
+            "攻击未造成伤害时：立刻对自己造成70%攻击值的瞬伤。受到攻击伤害时：反伤自己30%防御值的伤害。",
+            [InstantDamage, Counterattack],
         )
 
     def after_attack(self, view: GameView, hp_sum: int) -> GamePatch | None:
@@ -717,7 +574,14 @@ class AshveilPlayer(Player):
 class SundayPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            31, "星期日", 27, 4, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)]
+            19,
+            "星期日",
+            27,
+            4,
+            3,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(6)],
+            "受到攻击伤害时：双方各获得5层荆棘。攻击时：若选定的骰子各不相同，则将自己的荆棘转移给对手。",
+            [Thorn],
         )
 
     def after_being_attacked(self, view: GameView, hp_sum: int) -> GamePatch | None:
@@ -753,7 +617,14 @@ class SundayPlayer(Player):
 class BladePlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            32, "刃", 49, 4, 2, [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)]
+            20,
+            "刃",
+            49,
+            4,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(8), Dice(8)],
+            "攻击与防御时均拥有6次重投次数，但每次重投需要消耗2点生命值。",
+            [],
         )
 
     def before_attack_select(self, view: GameView) -> GamePatch | None:
@@ -771,7 +642,14 @@ class BladePlayer(Player):
 class HysilensPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            33, "海瑟音", 28, 3, 3, [Dice(4), Dice(4), Dice(4), Dice(4), Dice(6)]
+            21,
+            "海瑟音",
+            28,
+            3,
+            3,
+            [Dice(4), Dice(4), Dice(4), Dice(4), Dice(6)],
+            "攻击时：选定的骰子每有1个点数为偶数，则使对手陷入1层中毒。若全为偶数，则再使对手的中毒立刻结算一次。",
+            [Poisoning],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -792,7 +670,14 @@ class HysilensPlayer(Player):
 class RuanMeiPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            34, "阮·梅", 50, 2, 2, [Dice(6), Dice(6), Dice(6), Dice(6), Dice(8)]
+            22,
+            "阮·梅",
+            50,
+            2,
+            2,
+            [Dice(6), Dice(6), Dice(6), Dice(6), Dice(8)],
+            "攻击或防御时：若选定的骰子全为连续点数，获得一层进化，否则移除一层进化。",
+            [Evolution],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -809,7 +694,14 @@ class RuanMeiPlayer(Player):
 class HimekoPlayer(Player):
     def __init__(self) -> None:
         super().__init__(
-            35, "姬子", 33, 3, 3, [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)]
+            23,
+            "姬子",
+            33,
+            3,
+            3,
+            [Dice(4), Dice(4), Dice(6), Dice(6), Dice(8)],
+            "攻击时：若选定的骰子权威连续点数或相同点数，攻击值+12。",
+            [],
         )
 
     def after_attack_sum(self, view: GameView) -> GamePatch | None:
@@ -818,50 +710,15 @@ class HimekoPlayer(Player):
             return GamePatch(add_extra_attack=12)
 
 
-players: list[Player] = [
-    DefaultPlayer(),
-    DefaultAIPlayer(),
-    ChimeraPlayer(),
-    KleSparSparPlayer(),
-    BatRaccoonPlayer(),
-    DormasPlayer(),
-    RubbishBinPlayer(),
-    TrafficLightPlayer(),
-    CivetPlayer(),
-    ScootPlayer(),
-    CompanyWorkerPlayer(),
-    OverManPlayer(),
-    TeamLeaderPlayer(),
-    CastoricePlayer(),
-    YellowSpringPlayer(),
-    FireflyPlayer(),
-    RobinPlayer(),
-    BigHertaPlayer(),
-    KafukaPlayer(),
-    AventurinePlayer(),
-    MartchSeventhPlayer(),
-    DesolateDanHengPlayer(),
-    KleSparPlayer(),
-    YaoGuangPlayer(),
-    CyrenePlayer(),
-    PhainonPlayer(),
-    HyacinePlayer(),
-    SliverWolfPlayer(),
-    EvanesciaPlayer(),
-    MyPlayer(),
-    AshveilPlayer(),
-    SundayPlayer(),
-    BladePlayer(),
-    HysilensPlayer(),
-    RuanMeiPlayer(),
-    HimekoPlayer(),
-]
-
-
 # =====效果定义部分=====
 
 
 class Hack(Effect):
+    name = "骇入"
+    description = (
+        "结算前，将对手已选择骰子中点数最大的一颗转变为2点（不会作用于曜彩骰）"
+    )
+
     def __init__(self, master: Player) -> None:
         super().__init__("骇入", False, master)
 
@@ -876,6 +733,9 @@ class Hack(Effect):
 
 
 class InstantDamage(Effect):
+    name = "瞬伤"
+    description = "无需进入伤害结算环节，立刻造成的伤害"
+
     def __init__(self, master: Player, layers: int) -> None:
         super().__init__("瞬伤", True, master, layer=layers)
 
@@ -892,6 +752,9 @@ class InstantDamage(Effect):
 
 
 class Poisoning(Effect):
+    name = "中毒"
+    description = "在回合结算后，将会受到对应层数的伤害，随后使层数-1"
+
     def __init__(self, master: Player, layers: int) -> None:
         super().__init__("中毒", True, master, layer=layers)
 
@@ -924,6 +787,9 @@ class Poisoning(Effect):
 
 
 class ForceFields(Effect):
+    name = "力场"
+    description = "生效期间，不会受到常规攻击伤害"
+
     def __init__(self, master: Player, clear: bool):
         super().__init__("力场", False, master, clear=clear)
 
@@ -937,8 +803,11 @@ class ForceFields(Effect):
 
 
 class Strength(Effect):
+    name = "力量"
+    description = "在攻击时，提供对应层数的攻击值加成"
+
     def __init__(self, master: Player, layers: int, clear: bool):
-        super().__init__("力量", True, master=master, clear=clear, layer=layers)
+        super().__init__("力量", True, master, clear=clear, layer=layers)
 
     def before_sum(self, view: GameView) -> GamePatch | None:
         if not self.alive or self.master.role is None:
@@ -949,6 +818,9 @@ class Strength(Effect):
 
 
 class Disturbance(Effect):
+    name = "干扰"
+    description = "重投次数被减少"
+
     def __init__(self, master: Player, layers: int):
         super().__init__("干扰", True, master, layer=layers)
 
@@ -966,8 +838,11 @@ class Disturbance(Effect):
 
 
 class Recover(Effect):
+    name = "治愈"
+    description = "回复指定点数的生命值"
+
     def __init__(self, master: Player, layer: int):
-        super().__init__("治愈", True, master, layer)
+        super().__init__("治愈", True, master, layer=layer)
 
     def on_denfination(self, view: GameView) -> GamePatch | None:
         self.alive = False
@@ -978,8 +853,11 @@ class Recover(Effect):
 
 
 class AddAttackLevel(Effect):
+    name = "攻击等级"
+    description = "攻击时必须选择的骰子数量"
+
     def __init__(self, master: Player, layer: int):
-        super().__init__("攻击等级", True, master, layer)
+        super().__init__("攻击等级", True, master, layer=layer)
 
     def before_select(self, view: GameView) -> GamePatch | None:
         if self.master.role == "attacker" and view.state == "attack":
@@ -987,8 +865,11 @@ class AddAttackLevel(Effect):
 
 
 class AddDefenceLevel(Effect):
+    name = "防御等级"
+    description = "防御时必须选择的骰子数量"
+
     def __init__(self, master: Player, layer: int):
-        super().__init__("防御等级", True, master, layer)
+        super().__init__("防御等级", True, master, layer=layer)
 
     def before_select(self, view: GameView) -> GamePatch | None:
         if self.master.role == "defender" and view.state == "defence":
@@ -996,8 +877,11 @@ class AddDefenceLevel(Effect):
 
 
 class Pierce(Effect):
+    name = "洞穿"
+    description = "攻击时，无视对方的防御值与力场效果"
+
     def __init__(self, master: Player, clear: bool = False):
-        super().__init__("洞穿", False, master=master, clear=clear)
+        super().__init__("洞穿", False, master, clear=clear)
 
     def filter_damage(self, damage: DamageDict, view: GameView) -> DamageDict:
         """无视防御点数和力场效果。"""
@@ -1015,6 +899,9 @@ class Pierce(Effect):
 
 
 class DoubleShot(Effect):
+    name = "连击"
+    description = "额外进行1次基于当前攻击值的攻击"
+
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("连击", False, master, clear=clear)
 
@@ -1026,6 +913,9 @@ class DoubleShot(Effect):
 
 
 class Leap(Effect):
+    name = "跃升"
+    description = "结算前，随机将已选择骰子中点数最小的一颗，转变为该骰子的最大值（不会作用于曜彩骰）"
+
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("跃升", False, master, clear=clear)
 
@@ -1036,6 +926,9 @@ class Leap(Effect):
 
 
 class Thorn(Effect):
+    name = "荆棘"
+    description = "在回合结算前，将会受到对应层数的伤害，结算后清除荆棘"
+
     def __init__(self, master: Player, layer: int = 0):
         super().__init__("荆棘", True, master, layer=layer)
 
@@ -1049,8 +942,11 @@ class Thorn(Effect):
 
 
 class Resilience(Effect):
+    name = "韧性"
+    description = "在防御时，提供对应层数的防御值加成"
+
     def __init__(self, master: Player, layer: int = 0, clear: bool = False):
-        super().__init__("韧性", True, master, layer, clear)
+        super().__init__("韧性", True, master, layer=layer, clear=clear)
 
     def before_sum(self, view: GameView) -> GamePatch | None:
         if self.master.role != "defender":
@@ -1059,6 +955,9 @@ class Resilience(Effect):
 
 
 class Counterattack(Effect):
+    name = "反击"
+    description = "在受到攻击时，如果防御值更大，对攻击方造成差值伤害"
+
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("反击", False, master, clear=clear)
 
@@ -1083,6 +982,9 @@ class Counterattack(Effect):
 
 
 class Siphon(Effect):
+    name = "虹吸"
+    description = "攻击时，恢复造成伤害一定比例的生命值"
+
     def __init__(self, master: Player):
         super().__init__("虹吸", False, master)
 
@@ -1097,6 +999,9 @@ class Siphon(Effect):
 
 
 class Unyield(Effect):
+    name = "不屈"
+    description = "生效期间，始终保留1点生命值"
+
     def __init__(self, master: Player, clear: bool = False):
         super().__init__("不屈", False, master, clear=clear)
 
@@ -1112,6 +1017,9 @@ class Unyield(Effect):
 
 
 class Evolution(Effect):
+    name = "进化"
+    description = "使攻击时和防御时必选的骰子增加对应层数"
+
     def __init__(self, master: Player, layer: int = 0):
         super().__init__("进化", True, master, layer=layer)
 
@@ -1124,6 +1032,9 @@ class Evolution(Effect):
 
 class Double(Effect):
     """翻倍：本回合己方总点数（已选骰子 + 额外加成）翻倍，可叠加。"""
+
+    name = "翻倍"
+    description = "本回合己方总点数（已选骰子 + 额外加成）翻倍，可叠加"
 
     def __init__(self, master: Player) -> None:
         super().__init__("翻倍", True, master, layer=1, clear=True)
@@ -1139,6 +1050,9 @@ class Double(Effect):
 
 class Overload(Effect):
     """超载：攻击时附加与层数相同的攻击值，防御时对自己造成层数一半（向下取整）的伤害。"""
+
+    name = "超载"
+    description = "攻击时附加与层数相同的攻击值，但防御时对自己造成层数50%的伤害"
 
     def __init__(self, master: Player, layer: int) -> None:
         super().__init__("超载", True, master, layer=layer)
@@ -1162,9 +1076,31 @@ class Overload(Effect):
 class LastStand(Effect):
     """背水标记：实际结算在骰子的 trigger_dice 中完成。"""
 
+    name = "背水"
+    description = "将自身生命值降低为1，获得降低值的点数加成"
+
+    def __init__(self, master: Player):
+        super().__init__("背水", False, master)
+
 
 class Rainbow(Effect):
     """曜彩标记：获得 1 次曜彩骰使用次数，实际结算在骰子的 trigger_dice 中完成。"""
+
+    name = "曜彩"
+    description = "获得1次曜彩骰使用次数"
+
+    def __init__(self, master: Player):
+        super().__init__("曜彩", False, master)
+
+
+class Upgrade(Effect):
+    """升级标记，实际结算通过upgrade_dices在GameContext中完成"""
+
+    name = "升级"
+    description = "将符合条件的骰子进行稀有度和最大面数提升，最高变为十二面"
+
+    def __init__(self, master: Player):
+        super().__init__("升级", False, master)
 
 
 # =====曜彩骰定义部分=====
@@ -1183,6 +1119,7 @@ class RealSixSixDice(Dice):
                 {"effect": None, "value": 6},
                 {"effect": None, "value": 6},
             ],
+            "随时可用",
             "真•6•6",
         )
 
@@ -1200,6 +1137,7 @@ class RealRepeat(Dice):
                 {"effect": DoubleShot, "value": 4},
                 {"effect": DoubleShot, "value": 4},
             ],
+            "累计选择2次骰面4后，可以在攻击时使用",
             "真•复读",
         )
         self.chose_four = 0
@@ -1240,6 +1178,7 @@ class RealWarManiac(Dice):
                 {"effect": Thorn, "value": 12},
                 {"effect": Thorn, "value": 12},
             ],
+            "随时可用",
             "真•战狂",
         )
 
@@ -1270,6 +1209,7 @@ class RealEvolution(Dice):
                 {"effect": None, "value": 6},
                 {"effect": Double, "value": 2},
             ],
+            "随时可用",
             "真•进化",
         )
 
@@ -1294,6 +1234,7 @@ class RealFate(Dice):
                 {"effect": None, "value": 12, "must_select": True},
                 {"effect": None, "value": 16, "must_select": True},
             ],
+            "随时可用",
             "真•命运",
         )
 
@@ -1311,6 +1252,7 @@ class RealRevenge(Dice):
                 {"effect": None, "value": 12},
                 {"effect": None, "value": 12},
             ],
+            "累计受到25点伤害后，可以在攻击时使用",
             "真•复仇",
         )
 
@@ -1335,6 +1277,7 @@ class RealMedicalAdvice(Dice):
                 {"effect": Recover, "value": 6},
                 {"effect": Recover, "value": 6},
             ],
+            "随时可用",
             "真•医嘱",
         )
 
@@ -1363,6 +1306,7 @@ class RealLastWords(Dice):
                 {"effect": Double, "value": 2},
                 {"effect": Double, "value": 4},
             ],
+            "生命值≤8点时可用",
             "真•遗语",
         )
 
@@ -1392,6 +1336,7 @@ class RealCactus(Dice):
                 {"effect": Counterattack, "value": 8},
                 {"effect": Counterattack, "value": 9},
             ],
+            "只能在防御时使用",
             "真•仙人球",
         )
 
@@ -1423,6 +1368,7 @@ class RealMiracle(Dice):
                 {"effect": None, "value": 99},
                 {"effect": None, "value": 99},
             ],
+            "累计选择9次骰面1后，可以在攻击时使用",
             "真•奇迹",
         )
         self.chose_one = 0
@@ -1453,6 +1399,7 @@ class RealLoan(Dice):
                 {"effect": Overload, "value": 4},
                 {"effect": Overload, "value": 4},
             ],
+            "随时可用",
             "真•贷款",
         )
 
@@ -1481,6 +1428,7 @@ class RealStarShield(Dice):
                 {"effect": ForceFields, "value": 1},
                 {"effect": ForceFields, "value": 1},
             ],
+            "只能在防御时使用",
             "真•星盾",
         )
 
@@ -1512,6 +1460,7 @@ class RealOath(Dice):
                 {"effect": Unyield, "value": 6},
                 {"effect": Unyield, "value": 6},
             ],
+            "只能在防御时使用",
             "真•誓言",
         )
 
@@ -1543,6 +1492,7 @@ class RealPrime(Dice):
                 {"effect": None, "value": 7},
                 {"effect": None, "value": 7},
             ],
+            "随时可用",
             "真•质数",
         )
 
@@ -1560,6 +1510,7 @@ class BigRedButton(Dice):
                 {"effect": LastStand, "value": 8},
                 {"effect": LastStand, "value": 8},
             ],
+            "回合数≥5时，可以在攻击时使用",
             "大红按钮",
         )
 
@@ -1591,6 +1542,7 @@ class RealMagician(Dice):
                 {"effect": Hack, "value": 6},
                 {"effect": Hack, "value": 6},
             ],
+            "随时可用",
             "真•奇术师",
         )
 
@@ -1615,6 +1567,7 @@ class RealHeartbeat(Dice):
                 {"effect": Rainbow, "value": 9},
                 {"effect": Rainbow, "value": 9},
             ],
+            "随时可用",
             "真•心跳",
         )
 
@@ -1643,6 +1596,7 @@ class RealGambler(Dice):
                 {"effect": None, "value": 10},
                 {"effect": None, "value": 12},
             ],
+            "仅能在前4回合内使用",
             "真•赌徒",
         )
 
@@ -1663,6 +1617,7 @@ class RealMagicBullet(Dice):
                 {"effect": InstantDamage, "value": 5},
                 {"effect": InstantDamage, "value": 7},
             ],
+            "随时可用",
             "真•魔弹",
         )
 
@@ -1698,4 +1653,33 @@ special_dices = [
     RealWarManiac(),
     RealGambler(),
     RealMagicBullet(),
+]
+
+
+# 在文件末尾实例化，确保 related_effects 引用的效果类均已定义
+players: list[Player] = [
+    DefaultPlayer(),
+    DefaultAIPlayer(),
+    YellowSpringPlayer(),
+    FireflyPlayer(),
+    RobinPlayer(),
+    BigHertaPlayer(),
+    KafukaPlayer(),
+    AventurinePlayer(),
+    MartchSeventhPlayer(),
+    DesolateDanHengPlayer(),
+    KleSparPlayer(),
+    YaoGuangPlayer(),
+    CyrenePlayer(),
+    PhainonPlayer(),
+    HyacinePlayer(),
+    SliverWolfPlayer(),
+    EvanesciaPlayer(),
+    MyPlayer(),
+    AshveilPlayer(),
+    SundayPlayer(),
+    BladePlayer(),
+    HysilensPlayer(),
+    RuanMeiPlayer(),
+    HimekoPlayer(),
 ]

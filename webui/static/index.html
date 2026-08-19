@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>银河战力党</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <canvas id="starfield"></canvas>
+  <button id="sound-toggle" class="sound-toggle" title="音效开关">🔊</button>
+  <div id="round-banner" class="round-banner hidden"></div>
+  <div id="effect-pop" class="effect-pop hidden"></div>
+
+  <!-- 选角菜单 -->
+  <div id="menu-screen" class="screen">
+    <header class="menu-header">
+      <h1 class="game-title">银河战力党</h1>
+      <p class="game-subtitle">COSMICON COLLECTIVE · 回合制骰子对战</p>
+    </header>
+
+    <section class="menu-section">
+      <h2 class="section-title">选择你的角色</h2>
+      <div id="character-grid" class="card-grid"></div>
+    </section>
+
+    <section class="menu-section">
+      <h2 class="section-title">选择曜彩骰</h2>
+      <div id="special-grid" class="card-grid dice-grid"></div>
+    </section>
+
+    <div class="menu-footer">
+      <input id="seed-input" type="number" placeholder="随机种子（可选）" />
+      <button id="start-btn" class="btn btn-primary" disabled>开始对局</button>
+    </div>
+  </div>
+
+  <!-- 对局界面 -->
+  <div id="game-screen" class="screen hidden">
+    <header class="game-header glass">
+      <span id="round-label">第 1 回合</span>
+      <span id="phase-label" class="phase-badge">开始阶段</span>
+      <span id="reload-label"></span>
+    </header>
+
+    <main class="battlefield">
+      <!-- 对手面板 -->
+      <div class="player-panel opponent glass">
+        <div class="player-info">
+          <span class="player-name" id="opp-name"></span>
+          <span class="role-icon" id="opp-role-icon"></span>
+          <div class="hp-bar"><div class="hp-ghost" id="opp-hp-ghost"></div><div class="hp-fill opponent-hp" id="opp-hp-fill"></div></div>
+          <span class="hp-text" id="opp-hp-text"></span>
+        </div>
+        <div class="dice-row small" id="opp-dices"></div>
+        <div class="score-line" id="opp-score"></div>
+        <div class="effect-bar" id="opp-effects"></div>
+      </div>
+
+      <!-- 战斗日志 -->
+      <div class="log-panel glass" id="log-panel"></div>
+
+      <!-- 玩家面板 -->
+      <div class="player-panel you glass">
+        <div class="player-info">
+          <span class="player-name" id="you-name"></span>
+          <span class="role-icon" id="you-role-icon"></span>
+          <div class="hp-bar"><div class="hp-ghost" id="you-hp-ghost"></div><div class="hp-fill you-hp" id="you-hp-fill"></div></div>
+          <span class="hp-text" id="you-hp-text"></span>
+        </div>
+        <div class="dice-row" id="you-dices"></div>
+        <div class="score-line" id="you-score"></div>
+        <div class="special-info" id="special-info"></div>
+        <div class="effect-bar" id="you-effects"></div>
+      </div>
+    </main>
+
+    <!-- 操作区 -->
+    <footer class="action-bar glass" id="action-bar">
+      <span class="hint" id="action-hint">等待对手行动…</span>
+      <div class="action-buttons">
+        <button class="btn btn-primary" id="btn-confirm" disabled>确认选择</button>
+        <button class="btn" id="btn-reload" disabled>重投</button>
+        <button class="btn btn-special" id="btn-special" disabled>曜彩骰</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 结算覆盖层 -->
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-card glass">
+      <h2 id="overlay-title">对局结束</h2>
+      <p id="overlay-detail"></p>
+      <button class="btn btn-primary" id="btn-again">再来一局</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -9,6 +9,11 @@ from ..context import DamageDict, GamePatch, GameView
 
 
 class Effect:
+    """效果基类。子类需在类体中声明 name 与 description（类级），供 AI / 描述生成使用。"""
+
+    name: str = ""
+    description: str = ""
+
     def __init__(
         self,
         name: str,

@@ -19,6 +19,7 @@ class Dice:
         sides: int,
         special: bool = False,
         details: list[dict] | None = None,
+        use_require: str | None = None,
         name: str | None = None,
     ) -> None:
         self.sides = sides
@@ -30,6 +31,8 @@ class Dice:
         # 样式示例：列表长度需要为6，例如[{"effect":"some_effect","value":8},{},...]
         self.now_value: int = 0
         """目前骰子的面数"""
+        self.use_require: str | None = use_require
+        """使用要求，仅对曜彩骰生效"""
         self.now_effect: None | type[Effect] = None
         """目前的效果，无则为None"""
         self.name: None | str = name
@@ -49,6 +52,29 @@ class Dice:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def create_description(self) -> str:
+        """生成骰子描述：曜彩骰详述每面点数与效果，普通骰子简述面数。"""
+        if self.special:
+            assert self.details is not None
+            face_lines = []
+            for index, face in enumerate(self.details, start=1):
+                value = face.get("value")
+                effect = face.get("effect")
+                must = face.get("must_select", False)
+                if effect is not None:
+                    desc = getattr(effect, "description", "") or ""
+                    text = f"第{index}面：{value}点，触发效果：{desc}"
+                else:
+                    text = f"第{index}面：{value}点"
+                if must:
+                    text += "（必须选择）"
+                face_lines.append(text)
+            text = f"曜彩骰【{self.name}】：\n" + "\n".join(face_lines)
+            if self.use_require:
+                text += f"\n使用要求：{self.use_require}"
+            return text
+        return f"普通骰子（{self.sides}面，可掷出 1~{self.sides} 点）"
 
     def upgrade(self):
         if self.special:

@@ -2,7 +2,7 @@ import random
 from typing import Literal
 
 from core.context import GameContext, GamePatch
-from core.player.default import DefaultAIPlayer, players, special_dices
+from core.player.default import players, special_dices
 from core.player.player import Player
 
 
@@ -385,8 +385,24 @@ if __name__ == "__main__":
         print(f"输入无效，请输入 0 到 {len(special_dices) - 1} 之间的数字。")
         selected_spe_dice = input_int("请选择你的曜彩骰（输入index）：")
 
-    players[selected_player].special_dice = special_dices[selected_spe_dice]
-    game = GameManager(players[selected_player], DefaultAIPlayer(), seed=seed)
+    human_player = players[selected_player]
+    human_player.special_dice = special_dices[selected_spe_dice]
+
+    # AI 独立选角 + 选曜彩骰：prompt 不含玩家选择，deepcopy 隔离实例（允许与玩家同卡）
+    import copy
+
+    from core.ai import AIAgent
+
+    agent = AIAgent()
+    ai_candidates = [player for player in players if player.id != "默认测试卡牌"]
+    ai_player = copy.deepcopy(agent.select_character(ai_candidates))
+    agent.player = ai_player  # 先绑定，选曜彩骰时 AI 能结合自身角色技能
+    ai_player.special_dice = copy.deepcopy(agent.select_special_dice(special_dices))
+    ai_player.ai_agent = agent
+
+    print(f"AI 选择了角色：{ai_player.id}，曜彩骰：{ai_player.special_dice.name}")
+
+    game = GameManager(human_player, ai_player, seed=seed)
     del players
     del special_dices
     game.main()

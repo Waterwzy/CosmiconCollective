@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 from ..context import GamePatch, GameView
 from .dice import Dice
@@ -22,6 +22,8 @@ class Player:
         attack_dice: int | Select,
         defence_dice: int | Select,
         dices: list[Dice],
+        description: str,
+        related_effects: list[type[Effect]],
         flash_times: int = 0,
         special_dice: Dice | None = None,
         is_agent: bool = False,
@@ -47,6 +49,12 @@ class Player:
         """原本攻击骰子数量"""
         self.ori_denfece_dices = defence_dice
         """原本防御骰子数量"""
+        self.ori_dice_sides = [dice.sides for dice in dices]
+        """初始骰子组合（各骰面数）"""
+        self.description = description
+        """角色介绍（技能等）"""
+        self.related_effects = related_effects
+        """与角色技能相关的效果"""
         self.flash_times = flash_times
         """镀闪次数"""
         self.special_dice = special_dice
@@ -59,6 +67,8 @@ class Player:
         """角色的效果列表"""
         self.is_agent = is_agent
         """是否是AI角色"""
+        self.ai_agent = None
+        """AI 决策器（AIAgent），非 None 时由 AI 决定选骰"""
         self.role: Literal["attacker", "defender"] | None = None
         """角色的身份，攻击方或防御方"""
         self.load_max = load_max
@@ -73,6 +83,35 @@ class Player:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def create_description(
+        self, include_dice_combo: bool = True, effect_names_only: bool = False
+    ) -> str:
+        """生成角色描述：技能 + 关联效果 + 基础元数据（供 AI / 选角菜单使用）。
+
+        include_dice_combo=False 时不输出“初始骰子组合”（用于对敌方隐藏骰子配置）。
+        effect_names_only=True 时“关联效果”只列名称，不列介绍（介绍统一放在【相关效果】）。
+        """
+        lines = [f"【{self.id}】"]
+        lines.append(f"技能：{self.description}")
+        if self.related_effects:
+            lines.append("关联效果：")
+            for effect_cls in self.related_effects:
+                name = getattr(effect_cls, "name", "") or ""
+                if effect_names_only:
+                    lines.append(f"- {name}")
+                else:
+                    desc = getattr(effect_cls, "description", "") or ""
+                    lines.append(f"- {name}：{desc}")
+        meta = (
+            f"最大生命值 {self.max_hp}；"
+            f"初始攻击骰 {self.ori_attack_dices} 颗；"
+            f"初始防御骰 {self.ori_denfece_dices} 颗"
+        )
+        if include_dice_combo:
+            meta += f"；初始骰子组合 {self.ori_dice_sides}"
+        lines.append(f"元数据：{meta}")
+        return "\n".join(lines)
 
     def _legal_select(
         self,
@@ -129,40 +168,10 @@ class Player:
             action(int):操作类型，1为确认 2为重投 3使用曜彩骰
             act_list(list):操作骰子列表
         """
+        if self.ai_agent is not None:
+            return self.ai_agent.decide(role, reload_times, view, rng)
         if self.is_agent:
-            rng = rng if rng is not None else cast(random.Random, random)
-            if self.role == "attacker":
-                if isinstance(self.attack_dice, int):
-                    return (
-                        1,
-                        rng.sample(
-                            range(len(self.dices)),
-                            self.attack_dice,
-                        ),
-                    )
-                else:
-                    return (
-                        1,
-                        rng.sample(
-                            range(len(self.dices)), rng.randint(1, len(self.dices))
-                        ),
-                    )
-            elif self.role == "defender":
-                if isinstance(self.defence_dice, int):
-                    return (
-                        1,
-                        rng.sample(
-                            range(len(self.dices)),
-                            self.defence_dice,
-                        ),
-                    )
-                else:
-                    return (
-                        1,
-                        rng.sample(
-                            range(len(self.dices)), rng.randint(1, len(self.dices))
-                        ),
-                    )
+            return random_select(self, role, rng)
         select_list = []
         action = None
         while not self._legal_select(select_list, action, role, reload_times, view):
@@ -274,3 +283,24 @@ class Player:
 
     def after_reload(self, view: GameView, selected: list[int]) -> GamePatch | None:
         pass
+
+
+def random_select(
+    player: Player,
+    role: Literal["attack", "defence"],
+    rng: random.Random | None = None,
+) -> tuple[int, list]:
+    """生成一个合法的随机选骰决策（尊重 must_select 与所需骰数）。"""
+    from .helper import Select
+
+    rng = rng if rng is not None else random
+    must = [i for i, dice in enumerate(player.dices) if dice.must_select]
+    need = player.attack_dice if role == "attack" else player.defence_dice
+    if isinstance(need, Select):
+        # Select.NO_LIMIT：至少选满必须选择的骰子，否则随机 1~全部
+        need = max(1, len(must)) if must else rng.randint(1, len(player.dices))
+    selected = list(must)
+    rest = [i for i in range(len(player.dices)) if i not in selected]
+    while len(selected) < need and rest:
+        selected.append(rest.pop(rng.randrange(len(rest))))
+    return 1, selected

@@ -80,6 +80,36 @@ class PlayerView:
         """判断是否拥有指定类型的效果。"""
         return any(isinstance(eff, effect_type) for eff in self._player.effects)
 
+    @property
+    def description(self) -> str:
+        return self._player.description
+
+    @property
+    def related_effects(self) -> tuple[type[Effect], ...]:
+        return tuple(self._player.related_effects)
+
+    @property
+    def total_damage_taken(self) -> int:
+        return self._player.total_damage_taken
+
+    @property
+    def max_hp(self) -> int:
+        return self._player.max_hp
+
+    @property
+    def ori_attack_dices(self) -> int:
+        return self._player.ori_attack_dices
+
+    @property
+    def ori_defence_dices(self) -> int:
+        return self._player.ori_denfece_dices
+
+    def create_description(
+        self, include_dice_combo: bool = True, effect_names_only: bool = False
+    ) -> str:
+        """生成角色描述（委托给 Player）。"""
+        return self._player.create_description(include_dice_combo, effect_names_only)
+
 
 class GameView:
     """对 GameManager 的只读视图，同一时间触发的效果会收到同一个快照。"""
